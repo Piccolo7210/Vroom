@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import driverRoutes from "./routes/driverRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -19,7 +20,8 @@ app.use(
   );
 app.use(express.json()); // JSON body parsing
 app.use('/api/driver', driverRoutes); // Driver routes
-app.use('/api/customer', customerRoutes); // Customer routes
+app.use('/api/customer', customerRoutes);
+app.use('/api/admin', adminRoutes) // Customer routes
 // Database connection
 mongoose.connect(MONGODB_URI).then(()=>console.log("MongoDB is connected")).catch((e) => console.log(e));
 // Error handling
