@@ -52,6 +52,10 @@ const driverSchema = new mongoose.Schema({
         required: true,
         unique: true,
     },
+    userName: {
+        type: String,
+        required: true,
+    },
 });
 
 const Driver = mongoose.model('Driver', driverSchema);

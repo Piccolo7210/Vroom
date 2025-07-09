@@ -5,21 +5,29 @@ import jwt from 'jsonwebtoken';
 // Register new customer
 export const registerCustomer = async (req, res) => {
   try {
-    const { name, email, password, phone, sex, present_address } = req.body;
-    
-    // Check if customer already exists
-    const existingCustomer = await Customer.findOne({ email });
-    if (existingCustomer) {
+    let { name, userName, email, password, phone, sex, present_address } = req.body;
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
+    // Check if email already exists
+    const existingEmail = await Customer.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({ error: 'Email already registered' });
+    }
+    
+    // Check if username already exists
+    const existingUsername = await Customer.findOne({ userName });
+    if (existingUsername) {
+      return res.status(400).json({ error: 'Username already exists' });
     }
     
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    userName = userName.toLowerCase(); // Ensure username is stored in lowercase
     
     // Create new customer
     const customer = new Customer({
       name,
+      userName,
       email,
       password: hashedPassword,
       phone,
@@ -42,11 +50,21 @@ export const registerCustomer = async (req, res) => {
       data: {
         id: customer._id,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        userName: customer.userName
       }
     });
   } catch (error) {
     console.error(error);
+    // Check for MongoDB duplicate key error
+    if (error.code === 11000) {
+      if (error.keyPattern.email) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
+      if (error.keyPattern.userName) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+    }
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -54,8 +72,8 @@ export const registerCustomer = async (req, res) => {
 // Login customer
 export const loginCustomer = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
+    let { email, password } = req.body;
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
     // Check if customer exists
     const customer = await Customer.findOne({ email });
     if (!customer) {
@@ -81,7 +99,8 @@ export const loginCustomer = async (req, res) => {
       data: {
         id: customer._id,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        userName: customer.userName
       }
     });
   } catch (error) {
@@ -130,6 +149,38 @@ export const updateCustomerProfile = async (req, res) => {
     res.json({
       success: true,
       data: customer
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+// Check if username exists
+export const checkUsername = async (req, res) => {
+  try {
+    let { userName } = req.query;
+    userName = userName.toLowerCase(); // Ensure username is stored in lowercase
+    // Check if customer with this username exists
+    const existingCustomer = await Customer.findOne({ userName });
+    console.log("Checking username API working, userName:", userName,);
+    
+    res.json({
+      exists: !!existingCustomer
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+export const checkEmail = async (req, res) => {
+  try {
+    let { email } = req.query;
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
+    // Check if customer with this email exists
+    const existingCustomer = await Customer.findOne({ email });
+    console.log("Checking email API working, email:", email);
+    res.json({
+      exists: !!existingCustomer
     });
   } catch (error) {
     console.error(error);

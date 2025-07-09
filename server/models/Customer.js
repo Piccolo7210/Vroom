@@ -30,6 +30,12 @@ const customerSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    userName: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+    },
 });
 
 const Customer = mongoose.model('Customer', customerSchema);

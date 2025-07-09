@@ -5,11 +5,14 @@ import jwt from 'jsonwebtoken';
 // Register new driver
 export const registerDriver = async (req, res) => {
   try {
-    const { 
+    let { 
       name, email, password, phone, license_no, photo_link,
-      age, present_address, sex, vehicle_type, vehicle_no
+      age, present_address, sex, vehicle_type, vehicle_no, userName
     } = req.body;
-    
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
+    userName = userName.toLowerCase();
+    license_no = license_no.toUpperCase();
+    vehicle_no = license_no.toUpperCase(); // Ensure username is stored in lowercase
     // Check if driver already exists
     const existingDriver = await Driver.findOne({ email });
     if (existingDriver) {
@@ -35,6 +38,7 @@ export const registerDriver = async (req, res) => {
     // Create new driver
     const driver = new Driver({
       name,
+      userName,
       email,
       password: hashedPassword,
       phone,
@@ -74,8 +78,8 @@ export const registerDriver = async (req, res) => {
 // Login driver
 export const loginDriver = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
+    let { email, password } = req.body;
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
     // Check if driver exists
     const driver = await Driver.findOne({ email });
     if (!driver) {
@@ -101,7 +105,8 @@ export const loginDriver = async (req, res) => {
       data: {
         id: driver._id,
         name: driver.name,
-        email: driver.email
+        email: driver.email,
+        userName: driver.userName
       }
     });
   } catch (error) {
@@ -150,6 +155,59 @@ export const updateDriverProfile = async (req, res) => {
     res.json({
       success: true,
       data: driver
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+export const checkUsername = async (req, res) => {
+  try{
+ let {userName} = req.query;
+ userName = userName.toLowerCase(); // Ensure username is stored in lowercase
+  const existingDriver = await Driver.findOne({ userName });
+  res.json({
+      exists: !!existingDriver
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const checkEmail = async (req, res) => {
+  try {
+    let { email } = req.query;
+    email = email.toLowerCase(); // Ensure email is stored in lowercase
+    const existingDriver = await Driver.findOne({ email });
+    res.json({
+      exists: !!existingDriver
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+export const checkLicense = async (req, res) => {
+  try {
+    let { license_no } = req.query;
+    license_no = license_no.toUpperCase(); // Ensure license number is stored in lowercase
+    const existingDriver = await Driver.findOne({ license_no });
+    res.json({
+      exists: !!existingDriver
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+export const checkVehicleNo = async (req, res) => {
+  try {
+    let { vehicle_no } = req.query;
+    vehicle_no = vehicle_no.toUpperCase(); // Ensure vehicle number is stored in uppercase
+    const existingDriver = await Driver.findOne({ vehicle_no });
+    res.json({
+      exists: !!existingDriver
     });
   } catch (error) {
     console.error(error);
