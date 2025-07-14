@@ -45,12 +45,12 @@ const driverSchema = new mongoose.Schema({
     vehicle_type: {
         type: String,
         required: true,
-        enum: ['car', 'bike'],
+        enum: ['car', 'bike', 'cng'],
     },
     vehicle_no: {
         type: String,
         required: true,
-        unique: true,
+        // unique: true, // Temporarily removed to fix seeding issue
     },
     userName: {
         type: String,
