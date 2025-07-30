@@ -1,206 +1,27 @@
-// // 'use client';
-// // import *as React from 'react';
-// // import { useState, useEffect } from 'react';
-// // import { useRouter } from 'next/navigation';
-// // import Link from 'next/link';
-// // import { FaUser, FaTaxi, FaHistory, FaCreditCard, FaSignOutAlt } from 'react-icons/fa';
-
-// // export default function CustomerDashboard({ params }) {
-// //   const router = useRouter();
-// //   const { userName } = React.use(params);
-// //   const [userData, setUserData] = useState(null);
-// //   const [loading, setLoading] = useState(true);
-
-// //   useEffect(() => {
-// //     // Check authentication
-// //     const token = localStorage.getItem('token');
-// //     const userType = localStorage.getItem('userType');
-// //     const storedUserData = localStorage.getItem('userData');
-    
-// //     if (!token || userType !== 'customer') {
-// //       router.push('/login');
-// //       return;
-// //     }
-    
-// //     try {
-// //       const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
-// //       setUserData(parsedUserData);
-// //     } catch (error) {
-// //       console.error('Error parsing user data:', error);
-// //     } finally {
-// //       setLoading(false);
-// //     }
-// //   }, [router]);
-
-// //   const handleLogout = () => {
-// //     localStorage.removeItem('token');
-// //     localStorage.removeItem('userType');
-// //     localStorage.removeItem('userData');
-// //     router.push('/login');
-// //   };
-
-// //   if (loading) {
-// //     return (
-// //       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-// //         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-600"></div>
-// //       </div>
-// //     );
-// //   }
-
-// //   return (
-// //     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-// //       <div className="container mx-auto px-4 py-8">
-// //         {/* Header */}
-// //         <div className="flex justify-between items-center mb-8">
-// //           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
-// //             Customer Dashboard
-// //           </h1>
-// //           <button 
-// //             onClick={handleLogout}
-// //             className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-// //           >
-// //             <FaSignOutAlt className="mr-2" />
-// //             Logout
-// //           </button>
-// //         </div>
-
-// //         {/* User Profile Section */}
-// //         <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8 border border-gray-200/60">
-// //           <div className="flex items-center">
-// //             <div className="bg-blue-100 p-4 rounded-full">
-// //               <FaUser className="text-3xl text-blue-600" />
-// //             </div>
-// //             <div className="ml-6">
-// //               <h2 className="text-2xl font-bold">{userName || 'Customer'}</h2>
-// //               <p className="text-gray-600">{userData?.email || 'No email available'}</p>
-// //               <p className="text-gray-600">{userData?.phone || 'No phone available'}</p>
-// //             </div>
-// //           </div>
-// //         </div>
-
-// //         {/* Quick Actions */}
-// //         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-// //           <Link href="/dashboard/customer/book-ride" className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-gray-200/60 hover:shadow-xl transition-all transform hover:scale-[1.02]">
-// //             <div className="flex items-center">
-// //               <div className="bg-blue-100 p-4 rounded-full">
-// //                 <FaTaxi className="text-2xl text-blue-600" />
-// //               </div>
-// //               <div className="ml-4">
-// //                 <h3 className="text-lg font-semibold">Book a Ride</h3>
-// //                 <p className="text-gray-600">Request a new ride</p>
-// //               </div>
-// //             </div>
-// //           </Link>
-          
-// //           <Link href="/dashboard/customer/ride-history" className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-gray-200/60 hover:shadow-xl transition-all transform hover:scale-[1.02]">
-// //             <div className="flex items-center">
-// //               <div className="bg-blue-100 p-4 rounded-full">
-// //                 <FaHistory className="text-2xl text-blue-600" />
-// //               </div>
-// //               <div className="ml-4">
-// //                 <h3 className="text-lg font-semibold">Ride History</h3>
-// //                 <p className="text-gray-600">View your past rides</p>
-// //               </div>
-// //             </div>
-// //           </Link>
-          
-// //           <Link href="/dashboard/customer/payment-methods" className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-gray-200/60 hover:shadow-xl transition-all transform hover:scale-[1.02]">
-// //             <div className="flex items-center">
-// //               <div className="bg-blue-100 p-4 rounded-full">
-// //                 <FaCreditCard className="text-2xl text-blue-600" />
-// //               </div>
-// //               <div className="ml-4">
-// //                 <h3 className="text-lg font-semibold">Payment Methods</h3>
-// //                 <p className="text-gray-600">Manage your payment options</p>
-// //               </div>
-// //             </div>
-// //           </Link>
-// //         </div>
-        
-// //         {/* Additional Dashboard Content */}
-// //         <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-gray-200/60">
-// //           <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-// //           <div className="text-gray-600">
-// //             <p>No recent activity to display.</p>
-// //           </div>
-// //         </div>
-// //       </div>
-// //     </div>
-// //   );
-// // }
-// 'use client';
-// import *as React from 'react';
-// import { useState, useEffect } from 'react';
-// import { useRouter } from 'next/navigation';
-// import { DashboardLayout } from '../../../../components/dashboard/customer/DashboardLayout';
-
-// export default function CustomerDashboard({ params }) {
-//   const router = useRouter();
-//   const { userName } = React.use(params);
-//   const [userData, setUserData] = useState(null);
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     // Check authentication
-//     const token = localStorage.getItem('token');
-//     const userType = localStorage.getItem('userType');
-//     const storedUserData = localStorage.getItem('userData');
-    
-//     if (!token || userType !== 'customer') {
-//       router.push('/login');
-//       return;
-//     }
-    
-//     try {
-//       const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
-      
-//       // Verify that the URL username matches the logged in user
-//       if (parsedUserData && parsedUserData.userName && 
-//           parsedUserData.userName.toLowerCase() !== userName.toLowerCase()) {
-//         // If username in URL doesn't match the logged in user, redirect to the correct URL
-//         router.push(`/dashboard/customer/${parsedUserData.userName.toLowerCase()}`);
-//         return;
-//       }
-      
-//       setUserData(parsedUserData);
-//     } catch (error) {
-//       console.error('Error parsing user data:', error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   }, [router, userName]);
-
-//   if (loading) {
-//     return (
-//       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-//         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-600"></div>
-//       </div>
-//     );
-//   }
-
-//   // Get the section from URL hash if available
-//   let section = 'profile';
-//   if (typeof window !== 'undefined') {
-//     section = window.location.hash ? window.location.hash.slice(1) : 'profile';
-//   }
-
-//   return <DashboardLayout userName={userName} userData={userData} section={section} />;
-// }
-
-
 'use client';
-import * as React from 'react';
-import { useState, useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '../../../../components/dashboard/customer/DashboardLayout';
+import { FaUser, FaTaxi, FaHistory, FaSignOutAlt, FaMapMarkerAlt, FaClock } from 'react-icons/fa';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+// Import new components
+import BookRide from '@/components/dashboard/customer/BookRide';
+import RideHistory from '@/components/dashboard/customer/RideHistory';
+import RideTracking from '@/components/dashboard/customer/RideTracking';
+import CustomerProfile from '@/components/dashboard/customer/CustomerProfile';
 
 export default function CustomerDashboard({ params }) {
   const router = useRouter();
   const { userName } = React.use(params);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('book-ride');
+  const [activeRideId, setActiveRideId] = useState(null);
 
   useEffect(() => {
+    // Check authentication
     const token = localStorage.getItem('token');
     const userType = localStorage.getItem('userType');
     const storedUserData = localStorage.getItem('userData');
@@ -212,20 +33,61 @@ export default function CustomerDashboard({ params }) {
     
     try {
       const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
-      
-      if (parsedUserData && parsedUserData.userName && 
-          parsedUserData.userName.toLowerCase() !== userName.toLowerCase()) {
-        router.push(`/dashboard/customer/${parsedUserData.userName.toLowerCase()}`);
-        return;
-      }
-      
       setUserData(parsedUserData);
     } catch (error) {
       console.error('Error parsing user data:', error);
+      toast.error('Error loading user data');
     } finally {
       setLoading(false);
     }
-  }, [router, userName]);
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('userData');
+    toast.success('Logged out successfully');
+    router.push('/login');
+  };
+
+  const handleRideComplete = () => {
+    setActiveRideId(null);
+    setActiveTab('book-ride');
+    toast.success('Ride completed! You can book another ride.');
+  };
+
+  const menuItems = [
+    {
+      id: 'book-ride',
+      label: 'Book Ride',
+      icon: FaTaxi,
+      component: <BookRide userName={userName} />
+    },
+    {
+      id: 'track-ride',
+      label: 'Track Ride',
+      icon: FaMapMarkerAlt,
+      component: activeRideId ? 
+        <RideTracking rideId={activeRideId} onRideComplete={handleRideComplete} /> : 
+        <div className="text-center py-8">
+          <FaMapMarkerAlt className="mx-auto text-4xl text-gray-400 mb-4" />
+          <h3 className="text-lg font-semibold text-gray-600 mb-2">No active ride to track</h3>
+          <p className="text-gray-500">Book a ride first to see tracking information here.</p>
+        </div>
+    },
+    {
+      id: 'history',
+      label: 'Ride History',
+      icon: FaHistory,
+      component: <RideHistory />
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: FaUser,
+      component: <CustomerProfile userData={userData} />
+    }
+  ];
 
   if (loading) {
     return (
@@ -235,10 +97,123 @@ export default function CustomerDashboard({ params }) {
     );
   }
 
-  let section = 'profile';
-  if (typeof window !== 'undefined') {
-    section = window.location.hash ? window.location.hash.slice(1) : 'profile';
-  }
+  const activeMenuItem = menuItems.find(item => item.id === activeTab);
 
-  return <DashboardLayout userName={userName} userData={userData} section={section} />;
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+      
+      {/* Header */}
+      <header className="bg-white shadow-lg border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <div className="flex-shrink-0">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
+                  Vroom
+                </h1>
+              </div>
+              <div className="hidden md:block">
+                <span className="text-gray-600">Welcome back, </span>
+                <span className="font-semibold text-gray-900">{userData?.name || userName}</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
+                <FaClock className="w-4 h-4" />
+                <span>{new Date().toLocaleDateString()}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <FaSignOutAlt className="w-4 h-4" />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Sidebar Navigation */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                    <FaUser className="text-white text-lg" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{userData?.name || userName}</h3>
+                    <p className="text-sm text-gray-600">Customer</p>
+                  </div>
+                </div>
+              </div>
+              
+              <nav className="p-2">
+                {menuItems.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors ${
+                        activeTab === item.id
+                          ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-500'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <IconComponent className={`w-5 h-5 ${
+                        activeTab === item.id ? 'text-blue-600' : 'text-gray-500'
+                      }`} />
+                      <span className="font-medium">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+            
+            {/* Quick Stats */}
+            <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h4 className="font-semibold text-gray-900 mb-4">Quick Stats</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total Rides</span>
+                  <span className="font-semibold text-gray-900">-</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">This Month</span>
+                  <span className="font-semibold text-gray-900">-</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total Spent</span>
+                  <span className="font-semibold text-green-600">৳-</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 min-h-[600px]">
+              {activeMenuItem?.component}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
