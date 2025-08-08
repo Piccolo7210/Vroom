@@ -326,12 +326,18 @@ const ActiveRide = () => {
           </Button>
         </div>
         
-        {/* OTP Display */}
-        {activeRide.otp && activeRide.status !== 'completed' && (
-          <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+        {/* OTP Display - Only show when driver needs to verify pickup */}
+        {activeRide.status === 'accepted' && nextAction?.requiresOtp && (
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-yellow-800">Customer OTP:</span>
-              <span className="font-bold text-lg text-yellow-600">{activeRide.otp}</span>
+              <div>
+                <p className="text-sm font-medium text-blue-800">Customer Verification</p>
+                <p className="text-xs text-blue-600">Ask the customer for their OTP to verify pickup</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-blue-600">Customer should provide:</p>
+                <p className="text-sm font-medium text-blue-800">4-digit OTP</p>
+              </div>
             </div>
           </div>
         )}
@@ -368,16 +374,24 @@ const ActiveRide = () => {
           {nextAction.requiresOtp && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Enter Customer OTP
+                Customer Verification OTP
               </label>
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  <strong>⚠️ Security Protocol:</strong> Ask the customer to tell you their 4-digit OTP verbally before entering it here.
+                </p>
+              </div>
               <input
                 type="text"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
-                placeholder="Enter 4-digit OTP"
+                placeholder="Enter OTP provided by customer"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 maxLength={4}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                The customer will provide this OTP when you arrive at the pickup location.
+              </p>
             </div>
           )}
           

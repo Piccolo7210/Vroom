@@ -2,6 +2,7 @@ import Driver from '../models/Driver.js';
 import Ride from '../models/Ride.js';
 import TripHistory from '../models/TripHistory.js';
 import Earnings from '../models/Earnings.js';
+import mongoose from 'mongoose';
 
 // Get driver dashboard data
 export const getDriverDashboard = async (req, res) => {
@@ -225,40 +226,35 @@ export const getDriverTripHistory = async (req, res) => {
 // Get driver's earnings breakdown
 export const getDriverEarnings = async (req, res) => {
   try {
-    const driverId = req.driver.id;
+    console.log('=== DRIVER EARNINGS REQUEST ===');
+    console.log('Driver ID:', req.driver?.id);
+    console.log('Driver _id:', req.driver?._id);
+    console.log('Driver object:', req.driver);
+    console.log('Query params:', req.query);
+    
+    const driverId = req.driver._id;
     const { period = 'month', year, month } = req.query;
 
-    // Calculate date range
-    const now = new Date();
-    let startDate, endDate;
+    console.log('Processing earnings for driver:', driverId, 'period:', period);
 
-    if (period === 'custom' && year && month) {
-      startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
-    } else {
-      switch (period) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = now;
-          break;
-        case 'week':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          endDate = now;
-          break;
-        case 'month':
-        default:
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          endDate = now;
-          break;
-      }
-    }
+    // Convert driverId to ObjectId for queries
+    const driverObjectId = mongoose.Types.ObjectId.isValid(driverId) ? 
+      new mongoose.Types.ObjectId(driverId) : driverId;
 
-    // Get daily earnings breakdown
+    console.log('Driver ObjectId:', driverObjectId);
+
+    // Get ALL earnings data for the driver (no date filtering)
+    const allEarnings = await Earnings.find({
+      driver: driverObjectId
+    }).sort({ date: -1 });
+
+    console.log('Found total earnings records:', allEarnings.length);
+
+    // Get daily earnings breakdown (all time)
     const dailyEarnings = await Earnings.aggregate([
       {
         $match: {
-          driver: driverId,
-          date: { $gte: startDate, $lte: endDate }
+          driver: driverObjectId
         }
       },
       {
@@ -279,12 +275,11 @@ export const getDriverEarnings = async (req, res) => {
       }
     ]);
 
-    // Get payment method breakdown
+    // Get payment method breakdown (all time)
     const paymentBreakdown = await Earnings.aggregate([
       {
         $match: {
-          driver: driverId,
-          date: { $gte: startDate, $lte: endDate }
+          driver: driverObjectId
         }
       },
       {
@@ -296,12 +291,11 @@ export const getDriverEarnings = async (req, res) => {
       }
     ]);
 
-    // Get vehicle type breakdown
+    // Get vehicle type breakdown (all time)
     const vehicleBreakdown = await Earnings.aggregate([
       {
         $match: {
-          driver: driverId,
-          date: { $gte: startDate, $lte: endDate }
+          driver: driverObjectId
         }
       },
       {
@@ -314,12 +308,11 @@ export const getDriverEarnings = async (req, res) => {
       }
     ]);
 
-    // Calculate totals
+    // Calculate totals (all time)
     const totals = await Earnings.aggregate([
       {
         $match: {
-          driver: driverId,
-          date: { $gte: startDate, $lte: endDate }
+          driver: driverObjectId
         }
       },
       {
@@ -333,6 +326,8 @@ export const getDriverEarnings = async (req, res) => {
       }
     ]);
 
+    console.log('Totals aggregation result:', totals);
+
     const totalData = totals[0] || {
       total_earnings: 0,
       total_trips: 0,
@@ -340,42 +335,45 @@ export const getDriverEarnings = async (req, res) => {
       total_fare: 0
     };
 
+    const responseData = {
+      period_info: {
+        period,
+        total_records: allEarnings.length
+      },
+      summary: {
+        total_earnings: Math.round(totalData.total_earnings),
+        total_trips: totalData.total_trips,
+        total_commission: Math.round(totalData.total_commission),
+        total_fare: Math.round(totalData.total_fare),
+        avg_earnings_per_trip: totalData.total_trips > 0 
+          ? Math.round(totalData.total_earnings / totalData.total_trips)
+          : 0
+      },
+      daily_earnings: dailyEarnings.map(day => ({
+        date: `${day._id.year}-${String(day._id.month).padStart(2, '0')}-${String(day._id.day).padStart(2, '0')}`,
+        earnings: Math.round(day.daily_earnings),
+        trips: day.daily_trips,
+        commission: Math.round(day.daily_commission),
+        total_fare: Math.round(day.daily_total_fare)
+      })),
+      payment_breakdown: paymentBreakdown.map(method => ({
+        payment_method: method._id,
+        earnings: Math.round(method.earnings),
+        trips: method.trips
+      })),
+      vehicle_breakdown: vehicleBreakdown.map(vehicle => ({
+        vehicle_type: vehicle._id,
+        earnings: Math.round(vehicle.earnings),
+        trips: vehicle.trips,
+        avg_fare: Math.round(vehicle.avg_fare)
+      }))
+    };
+
+    console.log('Sending driver earnings response:', responseData);
+
     res.json({
       success: true,
-      data: {
-        period_info: {
-          period,
-          start_date: startDate,
-          end_date: endDate
-        },
-        summary: {
-          total_earnings: Math.round(totalData.total_earnings),
-          total_trips: totalData.total_trips,
-          total_commission: Math.round(totalData.total_commission),
-          total_fare: Math.round(totalData.total_fare),
-          avg_earnings_per_trip: totalData.total_trips > 0 
-            ? Math.round(totalData.total_earnings / totalData.total_trips)
-            : 0
-        },
-        daily_earnings: dailyEarnings.map(day => ({
-          date: `${day._id.year}-${String(day._id.month).padStart(2, '0')}-${String(day._id.day).padStart(2, '0')}`,
-          earnings: Math.round(day.daily_earnings),
-          trips: day.daily_trips,
-          commission: Math.round(day.daily_commission),
-          total_fare: Math.round(day.daily_total_fare)
-        })),
-        payment_breakdown: paymentBreakdown.map(method => ({
-          payment_method: method._id,
-          earnings: Math.round(method.earnings),
-          trips: method.trips
-        })),
-        vehicle_breakdown: vehicleBreakdown.map(vehicle => ({
-          vehicle_type: vehicle._id,
-          earnings: Math.round(vehicle.earnings),
-          trips: vehicle.trips,
-          avg_fare: Math.round(vehicle.avg_fare)
-        }))
-      }
+      data: responseData
     });
 
   } catch (error) {

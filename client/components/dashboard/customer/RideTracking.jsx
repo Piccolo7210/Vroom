@@ -5,27 +5,56 @@ import { FaMapMarkerAlt, FaRoute, FaCar, FaPhone, FaSpinner, FaClock, FaLocation
 import { toast } from 'react-toastify';
 import RideService from '@/app/lib/rideService';
 import SocketService from '@/app/lib/socketService';
-import RideMap from '@/components/dashboard/shared/RideMap';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import dynamic from 'next/dynamic';
+
+// Dynamically import RideMap to avoid SSR issues
+const RideMap = dynamic(
+  () => import('@/components/dashboard/shared/RideMap'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+        <FaSpinner className="animate-spin text-2xl text-gray-400" />
+        <span className="ml-2 text-gray-500">Loading map...</span>
+      </div>
+    )
+  }
+);
 
 const RideTracking = ({ rideId, onRideComplete }) => {
   const [ride, setRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [estimatedArrival, setEstimatedArrival] = useState(null);
+  const [currentDistance, setCurrentDistance] = useState(null);
+  const [tripProgress, setTripProgress] = useState(0);
   const socketConnected = useRef(false);
 
   useEffect(() => {
     if (rideId) {
       fetchRideDetails();
       setupRealTimeTracking();
+    } else {
+      setLoading(false); // No rideId, so stop loading
     }
 
     return () => {
       cleanupTracking();
     };
   }, [rideId]);
+
+  // Handle ride completion/cancellation
+  useEffect(() => {
+    if (ride && (ride.status === 'completed' || ride.status === 'cancelled') && onRideComplete) {
+      const timer = setTimeout(() => {
+        onRideComplete();
+      }, 3000); // Show completion message for 3 seconds before clearing
+      
+      return () => clearTimeout(timer);
+    }
+  }, [ride?.status, onRideComplete]);
 
   const fetchRideDetails = async () => {
     try {
@@ -68,23 +97,60 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
       // Listen for driver location updates
       SocketService.onDriverLocationUpdate((locationData) => {
+        console.log('Received driver location update:', locationData);
         setDriverLocation(locationData);
         calculateEstimatedArrival(locationData);
-        toast.info('Driver location updated');
+        calculateCurrentDistance(locationData);
+        calculateTripProgress(locationData);
+        
+        // Show subtle notification for location updates
+        if (ride && ['accepted', 'picked_up', 'in_progress'].includes(ride.status)) {
+          console.log('Driver location updated');
+        }
       });
 
       // Listen for ride status changes
       SocketService.onRideStatusChange((statusData) => {
+        console.log('Received ride status update:', statusData);
         setRide(prev => ({
           ...prev,
-          status: statusData.status
+          status: statusData.status,
+          [`${statusData.status}_at`]: statusData.timestamp
         }));
         
-        toast.success(statusData.message || `Ride status updated to ${statusData.status.replace('_', ' ')}`);
-        
-        if (statusData.status === 'completed') {
-          onRideComplete && onRideComplete();
+        // Show appropriate notifications based on status
+        switch(statusData.status) {
+          case 'accepted':
+            toast.success('🚗 Driver found! Your driver is on the way');
+            break;
+          case 'picked_up':
+            toast.success('🎉 You have been picked up! Enjoy your ride');
+            break;
+          case 'in_progress':
+            toast.info('🚀 Ride started! Heading to destination');
+            break;
+          case 'completed':
+            toast.success('✅ Ride completed! Thank you for using our service');
+            onRideComplete && onRideComplete();
+            break;
+          case 'cancelled':
+            toast.error('❌ Ride has been cancelled');
+            onRideComplete && onRideComplete();
+            break;
+          default:
+            toast.info(statusData.message || `Ride status: ${statusData.status.replace('_', ' ')}`);
         }
+      });
+
+      // Listen for driver arrival notifications
+      SocketService.getSocket()?.on('driver_nearby', (data) => {
+        toast.info('🚗 Your driver is nearby! Please be ready');
+      });
+
+      // Listen for ETA updates
+      SocketService.getSocket()?.on('eta_update', (data) => {
+        setEstimatedArrival(data.eta_minutes);
+        console.log('ETA updated:', data.eta_minutes, 'minutes');
       });
     }
   };
@@ -101,7 +167,7 @@ const RideTracking = ({ rideId, onRideComplete }) => {
   const calculateEstimatedArrival = (location) => {
     if (!ride || !location) return;
 
-    // Simple estimation based on distance and average speed
+    // Determine target location based on ride status
     const targetLocation = ride.status === 'accepted' ? 
       ride.pickup_location.coordinates : 
       ride.destination.coordinates;
@@ -113,10 +179,74 @@ const RideTracking = ({ rideId, onRideComplete }) => {
       targetLocation.longitude
     );
 
-    // Assume average speed of 30 km/h in city traffic
-    const avgSpeed = 30;
-    const estimatedTimeMinutes = Math.round((distance / avgSpeed) * 60);
+    // More sophisticated speed estimation based on various factors
+    let avgSpeed = 25; // Base speed in km/h
+
+    // Adjust speed based on time of day (traffic patterns)
+    const currentHour = new Date().getHours();
+    if ((currentHour >= 7 && currentHour <= 9) || (currentHour >= 17 && currentHour <= 19)) {
+      avgSpeed = 15; // Rush hour traffic
+    } else if (currentHour >= 22 || currentHour <= 6) {
+      avgSpeed = 35; // Night time, less traffic
+    }
+
+    // Adjust speed based on current driver speed if available
+    if (location.speed && location.speed > 0) {
+      // Use weighted average of current speed and estimated speed
+      avgSpeed = (location.speed * 0.7) + (avgSpeed * 0.3);
+    }
+
+    // Adjust for very short distances (traffic lights, etc.)
+    if (distance < 1) {
+      avgSpeed = Math.min(avgSpeed, 20);
+    }
+
+    const estimatedTimeMinutes = Math.max(1, Math.round((distance / avgSpeed) * 60));
     setEstimatedArrival(estimatedTimeMinutes);
+
+    // Calculate and display additional useful info
+    const estimatedArrivalTime = new Date(Date.now() + estimatedTimeMinutes * 60000);
+    console.log(`ETA: ${estimatedTimeMinutes} minutes (${estimatedArrivalTime.toLocaleTimeString()})`);
+    console.log(`Distance: ${distance.toFixed(2)} km, Speed: ${avgSpeed.toFixed(1)} km/h`);
+  };
+
+  const calculateCurrentDistance = (location) => {
+    if (!ride || !location) return;
+
+    const targetLocation = ride.status === 'accepted' ? 
+      ride.pickup_location.coordinates : 
+      ride.destination.coordinates;
+
+    const distance = calculateDistance(
+      location.latitude,
+      location.longitude,
+      targetLocation.latitude,
+      targetLocation.longitude
+    );
+
+    setCurrentDistance(distance);
+  };
+
+  const calculateTripProgress = (location) => {
+    if (!ride || !location || ride.status !== 'in_progress') return;
+
+    // Calculate progress from pickup to destination
+    const totalDistance = calculateDistance(
+      ride.pickup_location.coordinates.latitude,
+      ride.pickup_location.coordinates.longitude,
+      ride.destination.coordinates.latitude,
+      ride.destination.coordinates.longitude
+    );
+
+    const remainingDistance = calculateDistance(
+      location.latitude,
+      location.longitude,
+      ride.destination.coordinates.latitude,
+      ride.destination.coordinates.longitude
+    );
+
+    const progress = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
+    setTripProgress(progress);
   };
 
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -181,6 +311,26 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     });
   };
 
+  // Handle case when no rideId is provided
+  if (!rideId) {
+    return (
+      <Card className="p-8 text-center">
+        <div className="flex flex-col items-center space-y-4">
+          <FaMapMarkerAlt className="text-6xl text-gray-300" />
+          <div>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Active Ride</h3>
+            <p className="text-gray-500 mb-4">
+              You don't have any active rides to track. Book a ride first to see live tracking information here.
+            </p>
+          </div>
+          <p className="text-sm text-gray-500">
+            Switch to the "Book Ride" tab to start a new journey.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -199,8 +349,88 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     );
   }
 
+  // Show "No Active Ride" for completed or cancelled rides
+  if (ride.status === 'completed' || ride.status === 'cancelled') {
+    return (
+      <Card className="p-8 text-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+            ride.status === 'completed' ? 'bg-green-100' : 'bg-red-100'
+          }`}>
+            {ride.status === 'completed' ? (
+              <FaCar className={`text-2xl text-green-600`} />
+            ) : (
+              <FaCar className={`text-2xl text-red-600`} />
+            )}
+          </div>
+          
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              {ride.status === 'completed' ? 'Ride Completed Successfully!' : 'Ride Cancelled'}
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {ride.status === 'completed' 
+                ? 'Thank you for choosing Vroom! This page will refresh shortly.' 
+                : 'Your ride was cancelled. This page will refresh shortly.'
+              }
+            </p>
+            
+            {ride.status === 'completed' && (
+              <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">From:</span>
+                  <span className="font-medium">{ride.pickup_location.address}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">To:</span>
+                  <span className="font-medium">{ride.destination.address}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Fare:</span>
+                  <span className="font-medium text-green-600">৳{ride.fare.total_fare}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Completed:</span>
+                  <span className="font-medium">{formatTime(ride.ride_completed_at)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            Redirecting to booking page...
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Connection Status */}
+      <div className="flex items-center justify-between bg-white border rounded-lg p-3 shadow-sm">
+        <div className="flex items-center space-x-2">
+          <div className={`w-3 h-3 rounded-full ${
+            SocketService.isConnected() ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+          }`}></div>
+          <span className="text-sm font-medium">
+            {SocketService.isConnected() ? 'Live Tracking Active' : 'Connection Lost'}
+          </span>
+        </div>
+        {!SocketService.isConnected() && (
+          <Button
+            onClick={() => {
+              cleanupTracking();
+              setupRealTimeTracking();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            Reconnect
+          </Button>
+        )}
+      </div>
+
       {/* Ride Status Header */}
       <Card className="p-6">
         <div className="text-center">
@@ -210,12 +440,23 @@ const RideTracking = ({ rideId, onRideComplete }) => {
           </p>
           
           {estimatedArrival && ride.status !== 'completed' && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center justify-center space-x-2">
-                <FaClock className="text-blue-600" />
-                <span className="text-blue-800 font-medium">
-                  Estimated arrival: {estimatedArrival} minutes
-                </span>
+            <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-center space-x-3">
+                <FaClock className="text-blue-600 text-lg" />
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-800">
+                    {estimatedArrival} min
+                  </div>
+                  <div className="text-sm text-blue-600">
+                    {ride.status === 'accepted' ? 'until pickup' : 'until destination'}
+                  </div>
+                  <div className="text-xs text-blue-500 mt-1">
+                    ETA: {new Date(Date.now() + estimatedArrival * 60000).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -292,7 +533,7 @@ const RideTracking = ({ rideId, onRideComplete }) => {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center">
           <FaMapMarkerAlt className="mr-2 text-blue-600" />
-          Live Map
+          Live Map Tracking
         </h3>
         <RideMap 
           pickup={ride.pickup_location}
@@ -302,30 +543,128 @@ const RideTracking = ({ rideId, onRideComplete }) => {
         />
       </Card>
 
-      {/* Driver Location */}
+      {/* Live Tracking Stats */}
+      {driverLocation && ['accepted', 'picked_up', 'in_progress'].includes(ride.status) && (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <FaLocationArrow className="mr-2 text-purple-600" />
+            Live Tracking Stats
+          </h3>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {driverLocation.speed ? Math.round(driverLocation.speed) : 0}
+              </div>
+              <div className="text-sm text-gray-600">km/h</div>
+              <div className="text-xs text-gray-500">Current Speed</div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {currentDistance ? currentDistance.toFixed(1) : '---'}
+              </div>
+              <div className="text-sm text-gray-600">km</div>
+              <div className="text-xs text-gray-500">
+                {ride.status === 'accepted' ? 'To Pickup' : 'To Destination'}
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                {estimatedArrival || '---'}
+              </div>
+              <div className="text-sm text-gray-600">min</div>
+              <div className="text-xs text-gray-500">ETA</div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">
+                {formatTime(driverLocation.timestamp)}
+              </div>
+              <div className="text-sm text-gray-600">Last Update</div>
+              <div className="text-xs text-gray-500">
+                {Math.round((Date.now() - new Date(driverLocation.timestamp)) / 1000)}s ago
+              </div>
+            </div>
+          </div>
+
+          {/* Trip Progress Bar (only during ride) */}
+          {ride.status === 'in_progress' && (
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-gray-700">Trip Progress</span>
+                <span className="text-sm text-gray-600">{Math.round(tripProgress)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${tripProgress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>Pickup</span>
+                <span>Destination</span>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Driver Location Details */}
       {driverLocation && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <FaLocationArrow className="mr-2 text-purple-600" />
-            Live Driver Location
+            Driver Location Details
           </h3>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Current Speed</p>
-              <p className="font-semibold">{driverLocation.speed || 0} km/h</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-blue-700">Current Position</span>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                </div>
+                <div className="text-xs font-mono text-blue-800 mt-1">
+                  {driverLocation.latitude.toFixed(6)}, {driverLocation.longitude.toFixed(6)}
+                </div>
+              </div>
+              
+              <div className="p-3 bg-green-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-green-700">Movement</span>
+                  <FaCar className="text-green-600" />
+                </div>
+                <div className="text-xs text-green-800 mt-1">
+                  {driverLocation.heading !== undefined ? 
+                    `Heading ${Math.round(driverLocation.heading)}°` : 
+                    'Direction unknown'
+                  }
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Last Updated</p>
-              <p className="font-semibold">{formatTime(driverLocation.timestamp)}</p>
+
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-700">Location Accuracy</span>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  !driverLocation.accuracy || driverLocation.accuracy < 50 ? 
+                    'bg-green-100 text-green-800' : 
+                    driverLocation.accuracy < 100 ? 
+                      'bg-yellow-100 text-yellow-800' : 
+                      'bg-red-100 text-red-800'
+                }`}>
+                  {driverLocation.accuracy ? 
+                    `±${Math.round(driverLocation.accuracy)}m` : 
+                    'Good'
+                  }
+                </span>
+              </div>
+              <div className="text-xs text-gray-600">
+                Last updated: {new Date(driverLocation.timestamp).toLocaleString()}
+              </div>
             </div>
-          </div>
-          
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Driver coordinates:</p>
-            <p className="text-xs font-mono">
-              {driverLocation.latitude.toFixed(6)}, {driverLocation.longitude.toFixed(6)}
-            </p>
           </div>
         </Card>
       )}

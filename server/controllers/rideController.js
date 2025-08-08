@@ -5,6 +5,7 @@ import TripHistory from '../models/TripHistory.js';
 import Earnings from '../models/Earnings.js';
 import { pricingService } from '../services/pricingService.js';
 import { locationService } from '../services/locationService.js';
+import mongoose from 'mongoose';
 
 // Helper function to generate random OTP
 const generateOTP = () => {
@@ -554,6 +555,110 @@ export const getAllVehicleFareEstimates = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to calculate fare estimates'
+    });
+  }
+};
+
+// Get driver earnings
+export const getDriverEarnings = async (req, res) => {
+  try {
+    const driverId = req.driver._id;
+    const { period = 'month' } = req.query;
+
+    console.log('=== DRIVER EARNINGS REQUEST ===');
+    console.log('Driver object:', req.driver);
+    console.log('Driver ID (using _id):', driverId);
+    console.log('Driver ID type:', typeof driverId);
+    console.log('Period:', period);
+
+    // Convert driverId to ObjectId if it's not already
+    const driverObjectId = mongoose.Types.ObjectId.isValid(driverId) ? 
+      new mongoose.Types.ObjectId(driverId) : driverId;
+
+    console.log('Driver ObjectId:', driverObjectId);
+
+    // Get ALL earnings data for the driver (no date filtering)
+    const earnings = await Earnings.find({
+      driver: driverObjectId
+    }).populate('ride', 'pickup_location destination fare distance estimated_duration').sort({ date: -1 });
+
+    console.log('Found earnings records:', earnings.length);
+    console.log('Sample earnings record:', earnings[0]);
+
+    // Also get all earnings for this driver regardless of date to debug
+    console.log('Total earnings for driver:', earnings.length, 'records');
+    if (earnings.length > 0) {
+      console.log('First earning record:', {
+        id: earnings[0]._id,
+        driver: earnings[0].driver,
+        date: earnings[0].date,
+        driver_earnings: earnings[0].driver_earnings
+      });
+    }
+
+    // Calculate totals
+    const totalEarnings = earnings.reduce((sum, earning) => sum + earning.driver_earnings, 0);
+    const totalRides = earnings.length;
+    const averageFare = totalRides > 0 ? totalEarnings / totalRides : 0;
+
+    // Calculate earnings breakdown
+    const earningsBreakdown = {
+      base_fare: 0,
+      distance_fare: 0,
+      time_fare: 0,
+      surge_earnings: 0
+    };
+
+    // Since the current earnings model doesn't have breakdown, we'll estimate based on ride data
+    earnings.forEach(earning => {
+      if (earning.ride && earning.ride.fare) {
+        earningsBreakdown.base_fare += earning.ride.fare.base_fare || 0;
+        earningsBreakdown.distance_fare += earning.ride.fare.distance_fare || 0;
+        earningsBreakdown.time_fare += earning.ride.fare.time_fare || 0;
+        earningsBreakdown.surge_earnings += earning.ride.fare.surge_multiplier > 1 ? (earning.ride.fare.total_fare * 0.1) : 0;
+      }
+    });
+
+    // Group earnings by date for recent earnings
+    const earningsMap = new Map();
+    earnings.forEach(earning => {
+      const dateKey = earning.date.toISOString().split('T')[0];
+      if (!earningsMap.has(dateKey)) {
+        earningsMap.set(dateKey, {
+          date: dateKey,
+          amount: 0,
+          rides_count: 0
+        });
+      }
+      const dayEarning = earningsMap.get(dateKey);
+      dayEarning.amount += earning.driver_earnings;
+      dayEarning.rides_count += 1;
+    });
+
+    const recentEarnings = Array.from(earningsMap.values()).slice(0, 10);
+
+    const responseData = {
+      total_earnings: totalEarnings,
+      total_rides: totalRides,
+      average_fare: averageFare,
+      earnings_breakdown: earningsBreakdown,
+      recent_earnings: recentEarnings,
+      period: period,
+      all_earnings_count: earnings.length
+    };
+
+    console.log('Sending earnings response:', responseData);
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('Get driver earnings error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch driver earnings'
     });
   }
 };

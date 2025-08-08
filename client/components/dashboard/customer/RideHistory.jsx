@@ -17,16 +17,44 @@ const RideHistory = () => {
   }, []);
 
   const fetchRideHistory = async () => {
+    setLoading(true);
     try {
+      console.log('Fetching ride history...');
+      const token = localStorage.getItem('token');
+      console.log('Token exists:', !!token);
+      console.log('Token preview:', token ? token.substring(0, 20) + '...' : 'No token');
+      
+      // Try to decode the token to see what's inside
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          console.log('Token payload:', payload);
+          console.log('Token role:', payload.role);
+          console.log('Token id:', payload.id);
+          console.log('Token exp:', payload.exp ? new Date(payload.exp * 1000) : 'No expiration');
+        } catch (decodeError) {
+          console.error('Error decoding token:', decodeError);
+        }
+      }
+      
       const response = await RideService.getRideHistory();
+      console.log('Ride history response:', response);
+      
       if (response.success) {
         setRides(response.data.rides);
+        console.log('Rides loaded successfully:', response.data.rides.length);
       } else {
-        toast.error('Failed to load ride history');
+        console.error('API returned error:', response.error || 'Unknown error');
+        toast.error(`Failed to load ride history: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error fetching ride history:', error);
-      toast.error('Failed to load ride history');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      toast.error(`Failed to load ride history: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -241,9 +269,12 @@ const RideHistory = () => {
               </div>
 
               {ride.otp && ride.status !== 'completed' && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-800">Ride OTP:</span>
+                    <div>
+                      <span className="text-sm font-medium text-blue-800">Verification OTP:</span>
+                      <p className="text-xs text-blue-600">Share with driver at pickup</p>
+                    </div>
                     <span className="font-bold text-lg text-blue-600">{ride.otp}</span>
                   </div>
                 </div>
