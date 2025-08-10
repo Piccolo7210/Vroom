@@ -5,6 +5,10 @@ class RideService {
   // Helper method to get auth headers
   getAuthHeaders() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    console.log('Token from localStorage:', token);
+    console.log('Token length:', token?.length);
+    console.log('Token starts with:', token?.substring(0, 50));
+    
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` })
@@ -68,10 +72,26 @@ class RideService {
   // Get customer ride history
   async getRideHistory() {
     try {
+      console.log('Making API call to:', `${BASE_URL}/rides/history`);
+      const headers = this.getAuthHeaders();
+      console.log('Request headers:', headers);
+      
       const response = await fetch(`${BASE_URL}/rides/history`, {
-        headers: this.getAuthHeaders()
+        headers: headers
       });
-      return await response.json();
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('API response data:', data);
+      return data;
     } catch (error) {
       console.error('Error getting ride history:', error);
       throw error;
@@ -166,15 +186,155 @@ class RideService {
     }
   }
 
+  // Get complete driver profile
+  async getDriverProfile() {
+    try {
+      console.log('Fetching driver profile...');
+      const response = await fetch(`${BASE_URL}/driver/profile`, {
+        headers: this.getAuthHeaders()
+      });
+      
+      console.log('Driver profile response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Driver profile API error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Driver profile data:', data);
+      return data;
+    } catch (error) {
+      console.error('Error getting driver profile:', error);
+      throw error;
+    }
+  }
+
+  // Update driver profile
+  async updateDriverProfile(profileData) {
+    try {
+      console.log('Updating driver profile with data:', profileData);
+      const response = await fetch(`${BASE_URL}/driver/profile`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(profileData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Update profile API error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Update profile response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error updating driver profile:', error);
+      throw error;
+    }
+  }
+
+  // Get customer profile by username
+  async getCustomerProfile(userName) {
+    try {
+      console.log('Fetching customer profile for:', userName);
+      const response = await fetch(`${BASE_URL}/customer/profile/data/${userName}`, {
+        headers: this.getAuthHeaders()
+      });
+      
+      console.log('Customer profile response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Customer profile API error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Customer profile data:', data);
+      return data;
+    } catch (error) {
+      console.error('Error getting customer profile:', error);
+      throw error;
+    }
+  }
+
+  // Update customer profile
+  async updateCustomerProfile(profileData) {
+    try {
+      console.log('Updating customer profile with data:', profileData);
+      const response = await fetch(`${BASE_URL}/customer/profile`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(profileData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Update customer profile API error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Update customer profile response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error updating customer profile:', error);
+      throw error;
+    }
+  }
+
   // Get driver earnings
   async getDriverEarnings(period = 'month') {
     try {
-      const response = await fetch(`${BASE_URL}/rides/driver/earnings?period=${period}`, {
-        headers: this.getAuthHeaders()
+      console.log('=== RIDE SERVICE - DRIVER EARNINGS ===');
+      console.log('Making API call to:', `${BASE_URL}/rides/driver/earnings?period=${period}`);
+      const headers = this.getAuthHeaders();
+      console.log('Request headers:', headers);
+      
+      const url = `${BASE_URL}/rides/driver/earnings?period=${period}`;
+      console.log('Full URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: headers
       });
-      return await response.json();
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        console.error('Response not ok, status:', response.status);
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+      console.log('Response text length:', responseText.length);
+      
+      if (!responseText) {
+        console.error('Empty response received');
+        return { success: false, error: 'Empty response from server' };
+      }
+      
+      const data = JSON.parse(responseText);
+      console.log('Parsed API response data:', data);
+      console.log('Data keys:', Object.keys(data));
+      console.log('Data success:', data.success);
+      console.log('Data.data exists:', !!data.data);
+      
+      return data;
     } catch (error) {
+      console.error('=== RIDE SERVICE ERROR ===');
       console.error('Error getting driver earnings:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       throw error;
     }
   }
@@ -217,24 +377,6 @@ class RideService {
     } catch (error) {
       console.error('Error canceling ride:', error);
       throw error;
-    }
-  }
-
-  // Get driver earnings
-  async getDriverEarnings(period = 'month') {
-    try {
-      const response = await fetch(`${BASE_URL}/driver/earnings?period=${period}`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting driver earnings:', error);
-      // Return default data for demo purposes
-      return {
-        success: false,
-        data: null
-      };
     }
   }
 }

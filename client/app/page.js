@@ -116,7 +116,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
               <FaTaxi className="text-primary-600 text-3xl" />
-              <span className="text-xl font-bold">RideShare</span>
+              <span className="text-xl font-bold">Vroom</span>
             </Link>
             <div className="space-x-4">
               <Link href="/login" className="text-gray-600 hover:text-primary-600">

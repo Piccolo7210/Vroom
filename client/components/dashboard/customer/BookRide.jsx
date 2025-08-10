@@ -4,11 +4,26 @@ import { useState, useEffect, useRef } from 'react';
 import { FaMapMarkerAlt, FaSearch, FaCar, FaClock, FaMotorcycle, FaTruck, FaSpinner, FaLocationArrow, FaMap } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import RideService from '@/app/lib/rideService';
-import MapLocationSelector from './MapLocationSelector';
-import { Button } from '@/components/ui/button';
+import SocketService from '@/app/lib/socketService';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import dynamic from 'next/dynamic';
 
-const BookRide = ({ userName }) => {
+// Dynamically import MapLocationSelector to avoid SSR issues
+const MapLocationSelector = dynamic(
+  () => import('./MapLocationSelector'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+        <FaSpinner className="animate-spin text-2xl text-gray-400" />
+        <span className="ml-2 text-gray-500">Loading map...</span>
+      </div>
+    )
+  }
+);
+
+const BookRide = ({ userName, onRideBooked }) => {
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -320,7 +335,7 @@ const BookRide = ({ userName }) => {
       const response = await RideService.createRideRequest(rideData);
 
       if (response.success) {
-        toast.success('Ride booked successfully!');
+        toast.success('Ride booked successfully! Searching for nearby drivers...');
         setActiveRide({
           _id: response.data.ride_id,
           status: 'requested',
@@ -330,6 +345,11 @@ const BookRide = ({ userName }) => {
           vehicle_type: selectedVehicle,
           fare: { total_fare: response.data.estimated_fare }
         });
+        
+        // Notify parent component to switch to track ride tab
+        if (onRideBooked) {
+          onRideBooked(response.data.ride_id, 'track-ride');
+        }
         
         // Reset form
         setPickup('');
@@ -392,21 +412,35 @@ const BookRide = ({ userName }) => {
               </div>
               {activeRide.otp && (
                 <div>
-                  <p className="text-sm text-gray-600">OTP</p>
+                  <p className="text-sm text-gray-600">Verification OTP</p>
                   <p className="font-bold text-lg text-blue-600">{activeRide.otp}</p>
+                  <p className="text-xs text-blue-600 mt-1">Share this with your driver when they arrive</p>
                 </div>
               )}
             </div>
           </div>
         </Card>
         
-        <Button 
-          onClick={() => setActiveRide(null)}
-          variant="outline"
-          className="w-full"
-        >
-          Book Another Ride
-        </Button>
+        <div className="space-y-3">
+          <Button 
+            onClick={() => {
+              if (onRideBooked) {
+                onRideBooked(activeRide._id, 'track-ride');
+              }
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            🗺️ Track Your Ride Live
+          </Button>
+          
+          <Button 
+            onClick={() => setActiveRide(null)}
+            variant="outline"
+            className="w-full"
+          >
+            Book Another Ride
+          </Button>
+        </div>
       </div>
     );
   }

@@ -2,25 +2,67 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground: #111827;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Override any light text colors for better readability */
+.text-gray-400 {
+  color: #6b7280 !important;
+}
+
+.text-gray-500 {
+  color: #4b5563 !important;
+}
+
+.text-gray-600 {
+  color: #374151 !important;
+}
+
+/* Ensure all text has sufficient contrast */
+* {
+  color: inherit;
+}
+
+/* Professional input styling */
+input, select, textarea {
+  color: #111827 !important;
+}
+
+input::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Card and component text improvements */
+.bg-gray-50 {
+  background-color: #f8fafc !important;
+  color: #111827 !important;
+}
+
+.bg-gray-100 {
+  background-color: #f1f5f9 !important;
+  color: #111827 !important;
+}
+
+/* Professional dashboard styling */
+.dashboard-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-text {
+  color: #111827;
+  font-weight: 500;
+}
+
+.dashboard-subtitle {
+  color: #374151;
+  font-weight: 500;
 }

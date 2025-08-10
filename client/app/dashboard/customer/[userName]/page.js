@@ -19,6 +19,11 @@ export default function CustomerDashboard({ params }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('book-ride');
   const [activeRideId, setActiveRideId] = useState(null);
+  const [statsData, setStatsData] = useState({
+    totalRides: 0,
+    monthlyRides: 0,
+    totalSpent: 0
+  });
 
   useEffect(() => {
     // Check authentication
@@ -34,6 +39,12 @@ export default function CustomerDashboard({ params }) {
     try {
       const parsedUserData = storedUserData ? JSON.parse(storedUserData) : null;
       setUserData(parsedUserData);
+      
+      // Check for any active rides on page load
+      checkForActiveRides();
+      
+      // Fetch stats data
+      fetchStatsData();
     } catch (error) {
       console.error('Error parsing user data:', error);
       toast.error('Error loading user data');
@@ -41,6 +52,50 @@ export default function CustomerDashboard({ params }) {
       setLoading(false);
     }
   }, [router]);
+
+  const fetchStatsData = async () => {
+    try {
+      const RideService = (await import('@/app/lib/rideService')).default;
+      const response = await RideService.getRideHistory();
+      
+      if (response.success && response.data) {
+        const rides = response.data;
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        const monthlyRides = rides.filter(ride => {
+          const rideDate = new Date(ride.created_at || ride.ride_time);
+          return rideDate.getMonth() === currentMonth && 
+                 rideDate.getFullYear() === currentYear;
+        });
+
+        const totalSpent = rides
+          .filter(ride => ride.status === 'completed')
+          .reduce((sum, ride) => sum + (ride.fare || 0), 0);
+
+        setStatsData({
+          totalRides: rides.length,
+          monthlyRides: monthlyRides.length,
+          totalSpent: totalSpent
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching stats data:', error);
+    }
+  };
+
+  const checkForActiveRides = async () => {
+    try {
+      // You'll need to implement this API call to check for active rides
+      // For now, we'll just check if there's a stored activeRideId
+      const storedActiveRide = localStorage.getItem('activeRideId');
+      if (storedActiveRide) {
+        setActiveRideId(storedActiveRide);
+      }
+    } catch (error) {
+      console.error('Error checking for active rides:', error);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -53,7 +108,21 @@ export default function CustomerDashboard({ params }) {
   const handleRideComplete = () => {
     setActiveRideId(null);
     setActiveTab('book-ride');
+    
+    // Clear stored active ride ID
+    localStorage.removeItem('activeRideId');
+    
     toast.success('Ride completed! You can book another ride.');
+  };
+
+  const handleRideBooked = (rideId, targetTab) => {
+    setActiveRideId(rideId);
+    setActiveTab(targetTab);
+    
+    // Store active ride ID for persistence
+    localStorage.setItem('activeRideId', rideId);
+    
+    toast.info('🗺️ Switched to live tracking view');
   };
 
   const menuItems = [
@@ -61,7 +130,7 @@ export default function CustomerDashboard({ params }) {
       id: 'book-ride',
       label: 'Book Ride',
       icon: FaTaxi,
-      component: <BookRide userName={userName} />
+      component: <BookRide userName={userName} onRideBooked={handleRideBooked} />
     },
     {
       id: 'track-ride',
@@ -69,10 +138,19 @@ export default function CustomerDashboard({ params }) {
       icon: FaMapMarkerAlt,
       component: activeRideId ? 
         <RideTracking rideId={activeRideId} onRideComplete={handleRideComplete} /> : 
-        <div className="text-center py-8">
-          <FaMapMarkerAlt className="mx-auto text-4xl text-gray-400 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">No active ride to track</h3>
-          <p className="text-gray-500">Book a ride first to see tracking information here.</p>
+        <div className="text-center py-12">
+          <FaMapMarkerAlt className="mx-auto text-6xl text-gray-300 mb-6" />
+          <h3 className="text-xl font-semibold text-gray-600 mb-3">No Active Ride</h3>
+          <p className="text-gray-500 mb-6 max-w-md mx-auto">
+            You don't have any active rides to track. Book a ride first to see live tracking information here.
+          </p>
+          <button
+            onClick={() => setActiveTab('book-ride')}
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <FaTaxi className="mr-2" />
+            Book a Ride Now
+          </button>
         </div>
     },
     {
@@ -170,7 +248,7 @@ export default function CustomerDashboard({ params }) {
                     <button
                       key={item.id}
                       onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors ${
+                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors relative ${
                         activeTab === item.id
                           ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-500'
                           : 'text-gray-700 hover:bg-gray-50'
@@ -180,6 +258,14 @@ export default function CustomerDashboard({ params }) {
                         activeTab === item.id ? 'text-blue-600' : 'text-gray-500'
                       }`} />
                       <span className="font-medium">{item.label}</span>
+                      {item.id === 'track-ride' && activeRideId && (
+                        <span className="ml-auto flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                            Live
+                          </span>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -192,15 +278,15 @@ export default function CustomerDashboard({ params }) {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Rides</span>
-                  <span className="font-semibold text-gray-900">-</span>
+                  <span className="font-semibold text-gray-900">{statsData.totalRides}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">This Month</span>
-                  <span className="font-semibold text-gray-900">-</span>
+                  <span className="font-semibold text-blue-600">{statsData.monthlyRides}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Spent</span>
-                  <span className="font-semibold text-green-600">৳-</span>
+                  <span className="font-semibold text-green-600">৳{statsData.totalSpent}</span>
                 </div>
               </div>
             </div>
