@@ -35,7 +35,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'RideShare - Your Ride, Your Way',
+  title: 'Vroom - Your Ride, Your Way',
   description: 'Get where you need to go with convenience and reliability',
 };
 
