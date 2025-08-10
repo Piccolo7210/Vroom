@@ -7,7 +7,7 @@ import RideService from '@/app/lib/rideService';
 import MapLocationSelector from './MapLocationSelector';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-
+import dynamic from 'next/dynamic';
 const BookRide = ({ userName }) => {
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
