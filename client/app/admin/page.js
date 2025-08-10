@@ -24,14 +24,19 @@ const AdminLoginPage = () => {
       const data = await response.json();
          console.log(data);
       if (response.ok) {
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('userName', data.userName);
-        // if (data.role === 'general-admin') {
-        //   router.push(`/admin/dashboard/general-admin/${data.userName}`);
-        // } else if (data.role === 'mh-admin') {
-        //   router.push(`/admin/dashboard/mh-admin/${data.userName}`);
-        // }
-        router.push(`/admin/dashboard`);
+        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('userType', 'admin');
+        
+        // Store user data in localStorage
+        const userData = {
+          name: data.name,
+          userName: data.userName,
+          email: data.email
+        };
+        localStorage.setItem('userData', JSON.stringify(userData));
+        
+        // Redirect to admin dashboard with userName
+        router.push(`/admin/dashboard/${data.userName}`);
       } else {
         setError(data.message || 'Authentication failed');
       }

@@ -22,6 +22,7 @@ const seedAdmins = async () => {
     const admin = [
       {
         name: 'Admin',
+        userName: 'admin',
         email: 'admin@gmail.com',
         password: await bcrypt.hash('admin123', 10),
       },
