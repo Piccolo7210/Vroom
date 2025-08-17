@@ -37,7 +37,7 @@ export default function LoginPage() {
       
       // Try driver login first
       try {
-        const driverResponse = await fetch('http://localhost:5000/api/driver/login', {
+        const driverResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -66,7 +66,7 @@ export default function LoginPage() {
       
       // Try customer login
       try {
-        const customerResponse = await fetch('http://localhost:5000/api/customer/login', {
+        const customerResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

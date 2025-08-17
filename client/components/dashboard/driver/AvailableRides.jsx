@@ -7,19 +7,32 @@ import RideService from '@/app/lib/rideService';
 import SocketService from '@/app/lib/socketService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import LocationGuide from '@/components/LocationGuide';
+import IPLocationFix from '@/components/IPLocationFix';
 
 const AvailableRides = () => {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [acceptingRide, setAcceptingRide] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('checking'); // 'checking', 'granted', 'denied', 'unavailable'
+  const [showLocationGuide, setShowLocationGuide] = useState(false);
+  const [showIPFix, setShowIPFix] = useState(false);
 
   useEffect(() => {
     getCurrentLocation();
     setupRealTimeUpdates();
     
+    // Set up permission change listener
+    const checkPermissionPeriodically = setInterval(() => {
+      if (locationStatus === 'denied' || locationStatus === 'unavailable') {
+        checkAndRetryLocation();
+      }
+    }, 5000); // Check every 5 seconds
+    
     return () => {
       SocketService.removeAllListeners('new_ride_request');
+      clearInterval(checkPermissionPeriodically);
     };
   }, []);
 
@@ -29,32 +42,225 @@ const AvailableRides = () => {
     }
   }, [currentLocation]);
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          // Default to Dhaka center if location is not available
-          setCurrentLocation({
-            lat: 23.8103,
-            lng: 90.4125
-          });
-          toast.warn('Using default location (Dhaka). Please enable location services for better results.');
-        }
-      );
-    } else {
+  const checkAndRetryLocation = async () => {
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state === 'granted' && locationStatus !== 'granted') {
+        console.log('Location permission granted, retrying location access...');
+        getCurrentLocation();
+      }
+    } catch (error) {
+      // Permission API not supported, just try location access
+      if (locationStatus === 'denied') {
+        getCurrentLocation();
+      }
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    setLocationStatus('checking');
+    
+    // Check if we're on an IP address (not localhost/domain)
+    const isIpAddress = /^http:\/\/\d+\.\d+\.\d+\.\d+/.test(window.location.href);
+    
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
       setCurrentLocation({
         lat: 23.8103,
         lng: 90.4125
       });
-      toast.warn('Geolocation not supported. Using default location.');
+      setLocationStatus('unavailable');
+      toast.warn('Geolocation not supported by your browser. Using default location (Dhaka).');
+      return;
     }
+
+    // Special handling for IP addresses
+    if (isIpAddress) {
+      toast.info('🔍 Detected IP address access. Checking browser compatibility...');
+      
+      // Check if this is Chrome and suggest the fix
+      const isChrome = /Chrome/.test(navigator.userAgent);
+      if (isChrome) {
+        console.log('Chrome detected on IP address - may need --unsafely-treat-insecure-origin-as-secure flag');
+      }
+    }
+
+    // Check permission state first
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      
+      console.log('Current permission state:', permission.state);
+      console.log('Current URL:', window.location.href);
+      console.log('Is IP address:', isIpAddress);
+      
+      if (permission.state === 'denied') {
+        if (isIpAddress) {
+          toast.error(
+            '🚫 Location denied for IP address. For development:\n' +
+            '1. Use Chrome with --unsafely-treat-insecure-origin-as-secure flag\n' +
+            '2. Or add this IP to chrome://flags > "Insecure origins treated as secure"\n' +
+            '3. Or use Firefox with geo.security.allowinsecure=true',
+            { autoClose: 10000 }
+          );
+        }
+        handleLocationDenied();
+        return;
+      }
+      
+      if (permission.state === 'prompt') {
+        if (isIpAddress) {
+          toast.warning(
+            '⚠️ Browser may block location on IP addresses. If prompt doesn\'t appear, check the browser fix guide.',
+            { autoClose: 8000 }
+          );
+        } else {
+          toast.info('📍 Please allow location access to find nearby rides');
+        }
+      }
+      
+      if (permission.state === 'granted') {
+        toast.success('📍 Location permission granted, getting your location...');
+      }
+    } catch (error) {
+      console.log('Permission API not supported, proceeding with geolocation request');
+      if (isIpAddress) {
+        toast.warning('⚠️ Cannot check permission state on IP address. Attempting location access...');
+      }
+    }
+
+    // Enhanced geolocation options
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000, // 10 seconds timeout
+      maximumAge: 30000 // 30 seconds cache
+    };
+
+    console.log('Requesting location with options:', options);
+    console.log('User agent:', navigator.userAgent);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('Location successfully obtained:', {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date(position.timestamp).toLocaleString(),
+          url: window.location.href
+        });
+        
+        setCurrentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setLocationStatus('granted');
+        toast.success(`✅ Location detected successfully! (accuracy: ${Math.round(position.coords.accuracy)}m)`);
+      },
+      (error) => {
+        const isIpAddress = /^http:\/\/\d+\.\d+\.\d+\.\d+/.test(window.location.href);
+        
+        console.error('Geolocation error occurred:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          timestamp: new Date().toISOString(),
+          url: window.location.href,
+          isIpAddress: isIpAddress,
+          userAgent: navigator.userAgent
+        });
+        
+        let errorMessage = 'Could not get your location';
+        let toastType = 'warn';
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            if (isIpAddress) {
+              errorMessage = '🚫 Location denied on IP address. This is a browser security restriction.\n\n' +
+                           'Quick Fix:\n' +
+                           '• Chrome: Add --unsafely-treat-insecure-origin-as-secure=http://192.168.0.104:3000\n' +
+                           '• Firefox: Set geo.security.allowinsecure=true in about:config\n' +
+                           '• Or use HTTPS in production';
+              toastType = 'error';
+            } else {
+              errorMessage = 'Location access was denied. Please check your browser settings.';
+              toastType = 'error';
+            }
+            setLocationStatus('denied');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location unavailable. Please check your GPS and internet connection.';
+            setLocationStatus('unavailable');
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out. Retrying...';
+            setLocationStatus('unavailable');
+            // Auto-retry once after timeout
+            setTimeout(() => {
+              console.log('Auto-retrying location after timeout...');
+              getCurrentLocation();
+            }, 2000);
+            break;
+          default:
+            errorMessage = `Location error: ${error.message || 'Unknown error'}`;
+            if (isIpAddress) {
+              errorMessage += '\n\nNote: IP addresses have stricter location policies in browsers.';
+            }
+            setLocationStatus('unavailable');
+        }
+        
+        // Use default location
+        setCurrentLocation({
+          lat: 23.8103,
+          lng: 90.4125
+        });
+        
+        if (toastType === 'error') {
+          toast.error(errorMessage, { autoClose: 8000 });
+        } else {
+          toast.warn(errorMessage + ' Using default location (Dhaka).', { autoClose: 6000 });
+        }
+      },
+      options
+    );
+  };
+
+  const handleLocationDenied = () => {
+    setCurrentLocation({
+      lat: 23.8103,
+      lng: 90.4125
+    });
+    setLocationStatus('denied');
+    
+    toast.error(
+      '🚫 Location access permanently denied. To enable: \n' +
+      '1. Click the location icon in your browser address bar\n' +
+      '2. Select "Always allow" for this site\n' +
+      '3. Refresh the page',
+      { autoClose: 8000 }
+    );
+  };
+
+  const retryLocation = () => {
+    console.log('Manual location retry triggered');
+    setLocationStatus('checking');
+    toast.info('🔄 Retrying location access...');
+    getCurrentLocation();
+  };
+
+  const forceLocationRefresh = () => {
+    console.log('Force location refresh triggered');
+    setLocationStatus('checking');
+    setCurrentLocation(null);
+    toast.info('🔄 Force refreshing location...');
+    
+    // Clear any cached location
+    if (navigator.geolocation && navigator.geolocation.clearWatch) {
+      navigator.geolocation.clearWatch();
+    }
+    
+    // Wait a moment then retry
+    setTimeout(() => {
+      getCurrentLocation();
+    }, 500);
   };
 
   const setupRealTimeUpdates = () => {
@@ -161,23 +367,122 @@ const AvailableRides = () => {
         <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
           Available Rides
         </h2>
-        <Button
-          onClick={fetchAvailableRides}
-          variant="outline"
-          size="sm"
-        >
-          Refresh
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            onClick={fetchAvailableRides}
+            variant="outline"
+            size="sm"
+          >
+            🔄 Refresh Rides
+          </Button>
+          {(locationStatus === 'denied' || locationStatus === 'unavailable') && (
+            <Button
+              onClick={retryLocation}
+              variant="outline"
+              size="sm"
+              className="text-orange-600 border-orange-200 hover:bg-orange-50"
+            >
+              📍 Retry Location
+            </Button>
+          )}
+          <Button
+            onClick={forceLocationRefresh}
+            variant="outline"
+            size="sm"
+            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+          >
+            🎯 Force Refresh
+          </Button>
+        </div>
       </div>
 
-      {currentLocation && (
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <FaMapMarkerAlt className="inline mr-2" />
-            Searching for rides within 10km of your current location
-          </p>
+      {/* Location Status Indicator */}
+      <div className="mb-6">
+        {locationStatus === 'checking' && (
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <FaSpinner className="animate-spin text-blue-600 mr-2" />
+              <span className="text-blue-800">Checking location access...</span>
+            </div>
+          </div>
+        )}
+        
+        {locationStatus === 'granted' && currentLocation && (
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FaMapMarkerAlt className="text-green-600 mr-2" />
+                <span className="text-green-800">
+                  ✅ Location enabled - Searching within 10km of your current location
+                </span>
+              </div>
+              <div className="text-xs text-green-600">
+                <div>📍 {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}</div>
+                <div>🕒 Updated: {new Date().toLocaleTimeString()}</div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {locationStatus === 'denied' && (
+          <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FaMapMarkerAlt className="text-red-600 mr-2" />
+                <span className="text-red-800">
+                  🚫 Location access denied - Using default location (Dhaka)
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowLocationGuide(true)}
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  📖 General Guide
+                </Button>
+                <Button
+                  onClick={() => setShowIPFix(true)}
+                  size="sm"
+                  variant="outline"
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                >
+                  🔧 IP Address Fix
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {locationStatus === 'unavailable' && (
+          <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FaMapMarkerAlt className="text-yellow-600 mr-2" />
+                <span className="text-yellow-800">
+                  ⚠️ Location unavailable - Using default location (Dhaka)
+                </span>
+              </div>
+              <div className="text-xs text-yellow-600">
+                <div>Check GPS and internet connection</div>
+                <div>Or try the "Force Refresh" button</div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Debug Info - Remove this in production */}
+        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs">
+          <div className="font-medium text-gray-700 mb-1">🔍 Debug Info:</div>
+          <div className="text-gray-600 space-y-1">
+            <div>Status: <span className="font-mono">{locationStatus}</span></div>
+            <div>Has Location: <span className="font-mono">{currentLocation ? 'Yes' : 'No'}</span></div>
+            <div>Geolocation Support: <span className="font-mono">{navigator.geolocation ? 'Yes' : 'No'}</span></div>
+            <div>User Agent: <span className="font-mono text-xs">{navigator.userAgent.substring(0, 50)}...</span></div>
+          </div>
         </div>
-      )}
+      </div>
 
       {rides.length === 0 ? (
         <Card className="p-8 text-center">
@@ -286,6 +591,22 @@ const AvailableRides = () => {
           })}
         </div>
       )}
+      
+      {/* Location Guide Modal */}
+      <LocationGuide
+        isOpen={showLocationGuide}
+        onClose={() => setShowLocationGuide(false)}
+        onRetry={() => {
+          setShowLocationGuide(false);
+          retryLocation();
+        }}
+      />
+      
+      {/* IP Location Fix Modal */}
+      <IPLocationFix
+        isOpen={showIPFix}
+        onClose={() => setShowIPFix(false)}
+      />
     </div>
   );
 };

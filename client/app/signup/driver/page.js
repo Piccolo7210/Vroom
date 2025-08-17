@@ -328,7 +328,7 @@ export default function DriverSignupPage() {
       if (!usernameValue || usernameValue.length < 3) return;
       try {
         setCheckingUsername(true);
-        const response = await fetch(`http://localhost:5000/api/driver/check-username?userName=${encodeURIComponent(usernameValue)}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/check-username?userName=${encodeURIComponent(usernameValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -357,7 +357,7 @@ export default function DriverSignupPage() {
       
       try {
         setCheckingEmail(true);
-        const response = await fetch(`http://localhost:5000/api/driver/check-email?email=${encodeURIComponent(emailValue)}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/check-email?email=${encodeURIComponent(emailValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -384,7 +384,7 @@ export default function DriverSignupPage() {
       if (!licenseValue || licenseValue.length < 3) return;
       try {
         setCheckingLicense(true);
-        const response = await fetch(`http://localhost:5000/api/driver/check-license?license_no=${encodeURIComponent(licenseValue)}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/check-license?license_no=${encodeURIComponent(licenseValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -411,7 +411,7 @@ export default function DriverSignupPage() {
       if (!vehicleValue || vehicleValue.length < 3) return;
       try {
         setCheckingVehicle(true);
-        const response = await fetch(`http://localhost:5000/api/driver/check-vehicle?vehicle_no=${encodeURIComponent(vehicleValue)}`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/check-vehicle?vehicle_no=${encodeURIComponent(vehicleValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -449,7 +449,7 @@ export default function DriverSignupPage() {
       setLoading(true);
       const { confirmPassword, ...driverData } = data;
       
-      const response = await fetch('http://localhost:5000/api/driver/register', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

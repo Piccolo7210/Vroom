@@ -94,12 +94,15 @@ const ActiveRide = () => {
     if (!activeRide) return;
     
     try {
-      await RideService.updateDriverLocation(activeRide._id, locationData);
+      const response = await RideService.updateDriverLocation(activeRide._id, locationData);
       
-      // Emit location update via socket
-      SocketService.updateDriverLocation(activeRide._id, locationData);
+      if (!response.success) {
+        // Location update failed - will retry on next interval
+      }
+      
+      // Note: No need to emit socket event here anymore - backend handles it
     } catch (error) {
-      console.error('Error updating driver location:', error);
+      // Error updating driver location - will retry on next interval
     }
   };
 

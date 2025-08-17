@@ -133,8 +133,6 @@ const CustomerProfile = ({ userData: initialUserData }) => {
         present_address: formData.present_address.trim()
       };
       
-      console.log('Updating customer profile with data:', updateData);
-      
       const response = await RideService.updateCustomerProfile(updateData);
       
       if (response.success) {

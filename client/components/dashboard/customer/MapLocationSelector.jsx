@@ -138,13 +138,6 @@ const MapLocationSelector = ({
     
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        console.log('Map GPS Location:', {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: new Date(position.timestamp).toLocaleString()
-        });
-        
         const { latitude, longitude, accuracy } = position.coords;
         const newLocation = {
           lat: latitude,
