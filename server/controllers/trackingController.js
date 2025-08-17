@@ -47,6 +47,30 @@ export const updateDriverLocation = async (req, res) => {
 
     await location.save();
 
+    // ALSO update the driver_location in the Ride model for faster access
+    await Ride.findByIdAndUpdate(ride_id, {
+      driver_location: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        heading: heading || 0,
+        speed: speed || 0,
+        timestamp: new Date()
+      }
+    });
+
+    // Emit real-time location update to customers via Socket.IO
+    const io = req.app.get('socketio');
+    if (io) {
+      console.log(`🔥 Emitting driver location update for ride ${ride_id}`);
+      io.to(`ride_${ride_id}`).emit('driver_location', {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        heading: heading || 0,
+        speed: speed || 0,
+        timestamp: new Date()
+      });
+    }
+
     res.json({
       success: true,
       message: 'Location updated successfully',
@@ -76,7 +100,37 @@ export const getDriverLocation = async (req, res) => {
   try {
     const { ride_id } = req.params;
 
-    // Get the most recent location for this ride
+    // First try to get the location from the Ride model (faster)
+    const ride = await Ride.findById(ride_id).populate('driver', 'name phone vehicle_no vehicle_type');
+    
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ride not found'
+      });
+    }
+
+    // Check if we have driver_location in the ride document
+    if (ride.driver_location && ride.driver_location.latitude) {
+      console.log(`✅ Returning driver location from Ride model for ${ride_id}`);
+      return res.json({
+        success: true,
+        data: {
+          ride_id,
+          driver: ride.driver,
+          location: {
+            latitude: ride.driver_location.latitude,
+            longitude: ride.driver_location.longitude,
+            heading: ride.driver_location.heading || 0,
+            speed: ride.driver_location.speed || 0,
+            timestamp: ride.driver_location.timestamp || new Date()
+          }
+        }
+      });
+    }
+
+    // Fallback: Get the most recent location from Location collection
+    console.log(`⚠️ No driver_location in Ride model, checking Location collection for ${ride_id}`);
     const location = await Location.findOne({ ride: ride_id })
       .sort({ timestamp: -1 })
       .populate('driver', 'name phone vehicle_no vehicle_type');
@@ -88,6 +142,7 @@ export const getDriverLocation = async (req, res) => {
       });
     }
 
+    console.log(`✅ Returning driver location from Location collection for ${ride_id}`);
     res.json({
       success: true,
       data: {

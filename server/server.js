@@ -16,12 +16,10 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "http://localhost:3000",
-      "http://192.168.0.104:3000",
-      "http://103.217.111.218:3000",
-      "*"
+      'http://localhost:3000',
+      'http://192.168.0.104:3000'
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }
 });
@@ -30,19 +28,21 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 // Middleware
 app.use(
-      cors({
-          origin: [
-            "http://localhost:3000",
-            "http://192.168.0.104:3000",
-            "http://103.217.111.218:3000",
-            "*"
-          ],
-          methods: ["GET","POST","DELETE","PUT"],
-          allowedHeaders: ["Content-Type","Authorization"],
-          credentials: true
-      })
-  );
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'http://192.168.0.104:3000'
+    ],
+    methods: ['GET','POST','DELETE','PUT'],
+    allowedHeaders: ['Content-Type','Authorization'],
+    credentials: true
+  })
+);
 app.use(express.json()); // JSON body parsing
+
+// Make Socket.IO instance available to controllers
+app.set('socketio', io);
+
 app.use('/api/driver', driverRoutes); // Driver routes
 app.use('/api/customer', customerRoutes); // Customer routes
 app.use('/api/admin', adminRoutes); // Admin routes

@@ -18,7 +18,7 @@ export default function DriverDashboard({params}) {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('available-rides');
   const [totalRides, setTotalRides] = useState(0);
   const [monthlyRides, setMonthlyRides] = useState(0);
   const [monthlyEarnings, setMonthlyEarnings] = useState(0);
@@ -71,19 +71,22 @@ export default function DriverDashboard({params}) {
       // Fetch earnings data for stats
       const earningsResponse = await RideService.getDriverEarnings();
       if (earningsResponse.success && earningsResponse.data) {
-        const earningsData = earningsResponse.data;
+        const earningsData = Array.isArray(earningsResponse.data) 
+          ? earningsResponse.data 
+          : earningsResponse.data.earnings || [];
+        
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         
         const monthlyData = earningsData.filter(earning => {
-          const earningDate = new Date(earning.date);
+          const earningDate = new Date(earning.date || earning.created_at);
           return earningDate.getMonth() === currentMonth && 
                  earningDate.getFullYear() === currentYear;
         });
 
         setTotalRides(earningsData.length);
         setMonthlyRides(monthlyData.length);
-        setMonthlyEarnings(monthlyData.reduce((sum, earning) => sum + earning.amount, 0));
+        setMonthlyEarnings(monthlyData.reduce((sum, earning) => sum + (earning.amount || earning.total_amount || 0), 0));
       }
     } catch (error) {
       console.error('Error fetching complete profile:', error);

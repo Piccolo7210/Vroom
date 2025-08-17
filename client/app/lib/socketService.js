@@ -16,12 +16,10 @@ class SocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to server with ID:', this.socket.id);
       this.connected = true;
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Disconnected from server');
       this.connected = false;
     });
 
@@ -45,7 +43,6 @@ class SocketService {
   joinRide(rideId) {
     if (this.socket && this.connected) {
       this.socket.emit('join_ride', rideId);
-      console.log(`Joined ride room: ${rideId}`);
     }
   }
 
@@ -53,7 +50,6 @@ class SocketService {
   leaveRide(rideId) {
     if (this.socket && this.connected) {
       this.socket.emit('leave_ride', rideId);
-      console.log(`Left ride room: ${rideId}`);
     }
   }
 

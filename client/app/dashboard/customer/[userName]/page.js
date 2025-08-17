@@ -58,7 +58,7 @@ export default function CustomerDashboard({ params }) {
       const RideService = (await import('@/app/lib/rideService')).default;
       const response = await RideService.getRideHistory();
       
-      if (response.success && response.data) {
+      if (response.success && response.data && Array.isArray(response.data)) {
         const rides = response.data;
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -77,6 +77,14 @@ export default function CustomerDashboard({ params }) {
           totalRides: rides.length,
           monthlyRides: monthlyRides.length,
           totalSpent: totalSpent
+        });
+      } else {
+        // Handle case where no rides data or invalid format
+        console.log('No rides data available or invalid format:', response);
+        setStatsData({
+          totalRides: 0,
+          monthlyRides: 0,
+          totalSpent: 0
         });
       }
     } catch (error) {
