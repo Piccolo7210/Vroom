@@ -4,21 +4,20 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  FaUser, 
   FaUsers,
   FaCarAlt, 
   FaChartBar, 
   FaSignOutAlt,
-  FaCog,
   FaClipboardList,
-  FaMoneyBillWave
+  FaMoneyBillWave,
+  FaIdCard
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
 // Import admin components
-import AdminProfile from './Profile';
 import CustomerManagement from './CustomerManagement';
 import DriverManagement from './DriverManagement';
+import DriverVerification from './DriverVerification';
 import RideManagement from './RideManagement';
 import RevenueAnalytics from './RevenueAnalytics';
 
@@ -26,13 +25,47 @@ export const DashboardLayout = ({ userName, userData, section }) => {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState(section || 'dashboard');
   const [loading, setLoading] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState({
+    totalCustomers: 0,
+    totalDrivers: 0,
+    totalRides: 0
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash) {
       const hashValue = window.location.hash.slice(1);
       setActiveSection(hashValue);
     }
+    // Fetch dashboard stats when component mounts
+    fetchDashboardStats();
   }, []);
+
+  const fetchDashboardStats = async () => {
+    setStatsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/admin/dashboard/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard statistics');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setDashboardStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      toast.error('Failed to load dashboard statistics');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   const handleSectionChange = (e, section) => {
     e.preventDefault();
@@ -55,11 +88,6 @@ export const DashboardLayout = ({ userName, userData, section }) => {
       icon: <FaChartBar className="h-5 w-5" />
     },
     { 
-      name: 'Profile', 
-      section: 'profile',
-      icon: <FaUser className="h-5 w-5" />
-    },
-    { 
       name: 'Customers', 
       section: 'customers',
       icon: <FaUsers className="h-5 w-5" />
@@ -70,6 +98,11 @@ export const DashboardLayout = ({ userName, userData, section }) => {
       icon: <FaCarAlt className="h-5 w-5" />
     },
     { 
+      name: 'Driver Verification', 
+      section: 'driver-verification',
+      icon: <FaIdCard className="h-5 w-5" />
+    },
+    { 
       name: 'Rides', 
       section: 'rides',
       icon: <FaClipboardList className="h-5 w-5" />
@@ -78,11 +111,6 @@ export const DashboardLayout = ({ userName, userData, section }) => {
       name: 'Revenue', 
       section: 'revenue',
       icon: <FaMoneyBillWave className="h-5 w-5" />
-    },
-    { 
-      name: 'Settings', 
-      section: 'settings',
-      icon: <FaCog className="h-5 w-5" />
     },
     { 
       name: 'Logout', 
@@ -132,28 +160,30 @@ export const DashboardLayout = ({ userName, userData, section }) => {
       {/* Main Content */}
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto bg-white border border-gray-200 rounded-xl shadow-lg p-8">
-          {activeSection === 'profile' && <AdminProfile userData={userData} userName={userName} />}
           {activeSection === 'dashboard' && (
             <div>
               <h2 className="text-2xl font-bold mb-6">Admin Dashboard</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <DashboardCard 
                   title="Total Customers" 
-                  value="0" 
+                  value={statsLoading ? "Loading..." : dashboardStats.totalCustomers.toString()} 
                   icon={<FaUsers className="text-2xl text-white" />}
                   bgColor="bg-gradient-to-br from-blue-500 to-blue-700"
+                  loading={statsLoading}
                 />
                 <DashboardCard 
                   title="Total Drivers" 
-                  value="0" 
+                  value={statsLoading ? "Loading..." : dashboardStats.totalDrivers.toString()} 
                   icon={<FaCarAlt className="text-2xl text-white" />}
                   bgColor="bg-gradient-to-br from-green-500 to-green-700"
+                  loading={statsLoading}
                 />
                 <DashboardCard 
                   title="Total Rides" 
-                  value="0" 
+                  value={statsLoading ? "Loading..." : dashboardStats.totalRides.toString()} 
                   icon={<FaClipboardList className="text-2xl text-white" />}
                   bgColor="bg-gradient-to-br from-purple-500 to-purple-700"
+                  loading={statsLoading}
                 />
               </div>
               <div className="bg-gray-100 rounded-lg p-6">
@@ -164,14 +194,9 @@ export const DashboardLayout = ({ userName, userData, section }) => {
           )}
           {activeSection === 'customers' && <CustomerManagement />}
           {activeSection === 'drivers' && <DriverManagement />}
+          {activeSection === 'driver-verification' && <DriverVerification />}
           {activeSection === 'rides' && <RideManagement />}
           {activeSection === 'revenue' && <RevenueAnalytics />}
-          {activeSection === 'settings' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">System Settings</h2>
-              <p className="text-gray-600">Settings interface will be implemented here.</p>
-            </div>
-          )}
         </div>
       </main>
     </div>
@@ -179,7 +204,7 @@ export const DashboardLayout = ({ userName, userData, section }) => {
 };
 
 // Dashboard Card Component
-const DashboardCard = ({ title, value, icon, bgColor }) => (
+const DashboardCard = ({ title, value, icon, bgColor, loading }) => (
   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
     <div className={`${bgColor} p-4 flex items-center justify-between`}>
       <h3 className="text-lg font-medium text-white">{title}</h3>
@@ -188,7 +213,13 @@ const DashboardCard = ({ title, value, icon, bgColor }) => (
       </div>
     </div>
     <div className="p-6 flex items-center justify-between">
-      <span className="text-3xl font-bold">{value}</span>
+      <span className={`text-3xl font-bold ${loading ? 'text-gray-400' : ''}`}>
+        {loading ? (
+          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+        ) : (
+          value
+        )}
+      </span>
       <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
         View Details
       </span>

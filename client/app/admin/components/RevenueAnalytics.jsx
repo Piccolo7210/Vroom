@@ -42,7 +42,7 @@ const RevenueAnalytics = () => {
         endDate: dateFilter.endDate
       }).toString();
       
-      const response = await fetch(`/api/admin/revenue?${queryParams}`, {
+      const response = await fetch(`http://localhost:5000/api/admin/revenue?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

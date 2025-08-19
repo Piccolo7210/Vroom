@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    <button onclick="testLogin()">Test Admin Login</button>
+    <button onclick="testCustomers()">Test Customers API</button>
+    <div id="results"></div>
+
+    <script>
+        let token = null;
+
+        async function testLogin() {
+            try {
+                const response = await fetch('http://localhost:5000/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: 'admin@gmail.com', 
+                        password: 'admin123' 
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Login response:', data);
+                
+                if (response.ok) {
+                    token = data.accessToken;
+                    document.getElementById('results').innerHTML = '<p>Login successful! Token saved.</p>';
+                } else {
+                    document.getElementById('results').innerHTML = '<p>Login failed: ' + data.message + '</p>';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                document.getElementById('results').innerHTML = '<p>Login error: ' + error.message + '</p>';
+            }
+        }
+
+        async function testCustomers() {
+            if (!token) {
+                document.getElementById('results').innerHTML = '<p>Please login first!</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/admin/customers', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Customers response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Customers data:', data);
+                    document.getElementById('results').innerHTML = '<p>Customers loaded successfully! Found ' + data.customers.length + ' customers.</p>';
+                } else {
+                    const errorText = await response.text();
+                    console.error('Customers error:', errorText);
+                    document.getElementById('results').innerHTML = '<p>Customers error: ' + response.status + ' ' + errorText + '</p>';
+                }
+            } catch (error) {
+                console.error('Customers fetch error:', error);
+                document.getElementById('results').innerHTML = '<p>Customers fetch error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

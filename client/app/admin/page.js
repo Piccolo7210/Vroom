@@ -31,7 +31,8 @@ const AdminLoginPage = () => {
         const userData = {
           name: data.name,
           userName: data.userName,
-          email: data.email
+          email: data.email,
+          role: 'admin' // Explicitly store the role
         };
         localStorage.setItem('userData', JSON.stringify(userData));
         

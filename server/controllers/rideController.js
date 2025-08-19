@@ -311,40 +311,11 @@ export const updateRideStatus = async (req, res) => {
         );
       }
 
-      // Mark payment as completed for cash payments
-      if (ride.payment_method === 'cash') {
-        ride.payment_status = 'completed';
-      }
+      // Set payment status to pending - customer needs to select payment method
+      ride.payment_status = 'pending';
 
-      // Create trip history record
-      await TripHistory.create({
-        ride: ride._id,
-        driver: ride.driver,
-        customer: ride.customer,
-        pickup_location: ride.pickup_location,
-        destination: ride.destination,
-        vehicle_type: ride.vehicle_type,
-        total_fare: ride.fare.total_fare,
-        distance: ride.distance,
-        duration: ride.actual_duration || ride.estimated_duration,
-        payment_method: ride.payment_method,
-        trip_date: ride.ride_completed_at
-      });
-
-      // Create earnings record
-      const platformCommission = ride.fare.total_fare * 0.15; // 15% commission
-      const driverEarnings = ride.fare.total_fare - platformCommission;
-
-      await Earnings.create({
-        driver: ride.driver,
-        ride: ride._id,
-        date: ride.ride_completed_at,
-        total_fare: ride.fare.total_fare,
-        platform_commission: platformCommission,
-        driver_earnings: driverEarnings,
-        vehicle_type: ride.vehicle_type,
-        payment_method: ride.payment_method
-      });
+      // Trip history and earnings will be created when payment is completed
+      // in the updatePaymentStatus function
     }
 
     await ride.save();
@@ -660,5 +631,170 @@ export const getDriverEarnings = async (req, res) => {
       success: false,
       error: 'Failed to fetch driver earnings'
     });
+  }
+};
+
+// Update payment status for a ride
+export const updatePaymentStatus = async (req, res) => {
+  try {
+    const { ride_id } = req.params;
+    const { paymentMethod, paymentStatus, transactionId } = req.body;
+    const customerId = req.customer.id;
+
+    console.log(`Updating payment for ride ${ride_id}:`, {
+      paymentMethod,
+      paymentStatus,
+      transactionId,
+      customerId
+    });
+
+    // Validate ride ID
+    if (!mongoose.Types.ObjectId.isValid(ride_id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ride ID'
+      });
+    }
+
+    // Find the ride and verify ownership
+    const ride = await Ride.findById(ride_id);
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        error: 'Ride not found'
+      });
+    }
+
+    // Verify that the customer owns this ride
+    if (ride.customer.toString() !== customerId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to update this ride payment'
+      });
+    }
+
+    // Verify ride is completed
+    if (ride.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Can only update payment for completed rides'
+      });
+    }
+
+    // Update payment information
+    const updateData = {
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      updated_at: new Date()
+    };
+
+    // Add transaction ID if provided (for online payments)
+    if (transactionId) {
+      updateData.transaction_id = transactionId;
+    }
+
+    const updatedRide = await Ride.findByIdAndUpdate(
+      ride_id,
+      updateData,
+      { new: true }
+    ).populate('customer', 'name email phone')
+     .populate('driver', 'name email phone vehicle_type vehicle_number');
+
+    console.log('Payment updated successfully:', updatedRide);
+
+    // If payment is completed, update driver earnings and create trip history
+    if (paymentStatus === 'completed') {
+      try {
+        // Create trip history record
+        await TripHistory.create({
+          ride: ride._id,
+          driver: ride.driver,
+          customer: ride.customer,
+          pickup_location: ride.pickup_location,
+          destination: ride.destination,
+          vehicle_type: ride.vehicle_type,
+          total_fare: ride.fare.total_fare,
+          distance: ride.distance,
+          duration: ride.actual_duration || ride.estimated_duration,
+          payment_method: paymentMethod,
+          trip_date: ride.ride_completed_at
+        });
+
+        // Create earnings record
+        const platformCommission = ride.fare.total_fare * 0.15; // 15% commission
+        const driverEarnings = ride.fare.total_fare - platformCommission;
+
+        await Earnings.create({
+          driver: ride.driver,
+          ride: ride._id,
+          date: ride.ride_completed_at,
+          total_fare: ride.fare.total_fare,
+          platform_commission: platformCommission,
+          driver_earnings: driverEarnings,
+          vehicle_type: ride.vehicle_type,
+          payment_method: paymentMethod
+        });
+
+        console.log('Trip history and driver earnings created for completed payment');
+      } catch (earningsError) {
+        console.error('Error creating trip history and earnings:', earningsError);
+        // Don't fail the payment update if earnings creation fails
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment status updated successfully',
+      data: {
+        ride: updatedRide
+      }
+    });
+
+  } catch (error) {
+    console.error('Update payment status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update payment status'
+    });
+  }
+};
+
+// Helper function to update driver earnings
+const updateDriverEarnings = async (ride) => {
+  try {
+    if (!ride.driver) {
+      console.log('No driver assigned to ride, skipping earnings update');
+      return;
+    }
+
+    const driverId = ride.driver._id || ride.driver;
+    const fare = ride.fare.total_fare;
+    const driverEarnings = fare * 0.8; // Driver gets 80% of the fare
+    const platformFee = fare * 0.2; // Platform takes 20%
+
+    // Create or update earnings record
+    await Earnings.findOneAndUpdate(
+      {
+        driver: driverId,
+        date: new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
+      },
+      {
+        $inc: {
+          total_earnings: driverEarnings,
+          platform_fee: platformFee,
+          total_rides: 1
+        },
+        $setOnInsert: {
+          driver: driverId,
+          date: new Date().toISOString().split('T')[0]
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`Updated earnings for driver ${driverId}: +${driverEarnings}`);
+  } catch (error) {
+    console.error('Error updating driver earnings:', error);
+    throw error;
   }
 };

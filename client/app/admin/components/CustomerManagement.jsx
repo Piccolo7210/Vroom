@@ -2,24 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FaUser, FaSearch, FaEdit, FaBan, FaTrash, FaCheck, FaEye, FaSpinner } from 'react-icons/fa';
+import { useRouter } from 'next/navigation';
+import { FaUser, FaSearch, FaEye, FaSpinner } from 'react-icons/fa';
+// import { authenticatedFetch } from '../../lib/authUtils';
 
 const CustomerManagement = () => {
+  const router = useRouter();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // list, details, edit
+  const [viewMode, setViewMode] = useState('list'); // list, details
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    status: ''
-  });
 
   // Fetch customers
   useEffect(() => {
@@ -30,22 +26,42 @@ const CustomerManagement = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/customers?page=${page}&limit=${limit}&search=${searchTerm}`, {
+      
+      if (!token) {
+        toast.error('Authentication required. Please log in again.');
+        return;
+      }
+      
+      console.log('Fetching customers with token:', token.substring(0, 10) + '...');
+      console.log('Making request to:', `http://localhost:5000/api/admin/customers?page=${page}&limit=${limit}&search=${searchTerm}`);
+      
+      const response = await fetch(`http://localhost:5000/api/admin/customers?page=${page}&limit=${limit}&search=${searchTerm}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch customers');
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`Failed to fetch customers: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
-      setCustomers(data.customers);
+      console.log('Customers data:', data);
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to fetch customers');
+      }
+      
+      setCustomers(data.customers || []);
       setTotalPages(data.totalPages || 1);
     } catch (error) {
       console.error('Error fetching customers:', error);
-      toast.error('Error loading customers. Please try again.');
+      toast.error(`Error loading customers: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -60,123 +76,6 @@ const CustomerManagement = () => {
   const handleViewCustomer = (customer) => {
     setSelectedCustomer(customer);
     setViewMode('details');
-  };
-
-  const handleEditCustomer = (customer) => {
-    setSelectedCustomer(customer);
-    setEditForm({
-      name: customer.name || '',
-      email: customer.email || '',
-      phone: customer.phone || '',
-      address: customer.address || '',
-      status: customer.status || 'active'
-    });
-    setViewMode('edit');
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleUpdateCustomer = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/customers/${selectedCustomer._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(editForm)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update customer');
-      }
-
-      toast.success('Customer updated successfully');
-      setViewMode('list');
-      fetchCustomers();
-    } catch (error) {
-      console.error('Error updating customer:', error);
-      toast.error('Error updating customer. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggleStatus = async (customerId, currentStatus) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/customers/${customerId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update customer status');
-      }
-
-      toast.success(`Customer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
-      
-      // Update local state
-      setCustomers(customers.map(cust => 
-        cust._id === customerId ? { ...cust, status: newStatus } : cust
-      ));
-      
-      if (selectedCustomer && selectedCustomer._id === customerId) {
-        setSelectedCustomer({ ...selectedCustomer, status: newStatus });
-      }
-    } catch (error) {
-      console.error('Error updating customer status:', error);
-      toast.error('Error updating customer status. Please try again.');
-    }
-  };
-
-  const handleDeleteCustomer = async (customerId) => {
-    if (!window.confirm('Are you sure you want to delete this customer? This action cannot be undone.')) {
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/customers/${customerId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete customer');
-      }
-
-      toast.success('Customer deleted successfully');
-      
-      // Update local state
-      setCustomers(customers.filter(cust => cust._id !== customerId));
-      
-      if (selectedCustomer && selectedCustomer._id === customerId) {
-        setViewMode('list');
-        setSelectedCustomer(null);
-      }
-    } catch (error) {
-      console.error('Error deleting customer:', error);
-      toast.error('Error deleting customer. Please try again.');
-    }
   };
 
   // Pagination handlers
@@ -231,9 +130,7 @@ const CustomerManagement = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Phone
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
+
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -274,47 +171,14 @@ const CustomerManagement = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {customer.phone || 'N/A'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        customer.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {customer.status || 'active'}
-                    </span>
-                  </td>
+
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleViewCustomer(customer)}
-                      className="text-gray-600 hover:text-gray-900 mr-3"
+                      className="text-gray-600 hover:text-gray-900"
                       title="View Details"
                     >
                       <FaEye />
-                    </button>
-                    <button
-                      onClick={() => handleEditCustomer(customer)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                      title="Edit Customer"
-                    >
-                      <FaEdit />
-                    </button>
-                    <button
-                      onClick={() => handleToggleStatus(customer._id, customer.status)}
-                      className={`${
-                        customer.status === 'active' ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
-                      } mr-3`}
-                      title={customer.status === 'active' ? 'Deactivate Customer' : 'Activate Customer'}
-                    >
-                      {customer.status === 'active' ? <FaBan /> : <FaCheck />}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCustomer(customer._id)}
-                      className="text-red-600 hover:text-red-900"
-                      title="Delete Customer"
-                    >
-                      <FaTrash />
                     </button>
                   </td>
                 </tr>
@@ -396,13 +260,7 @@ const CustomerManagement = () => {
                 <FaUser className="text-gray-500 text-5xl" />
               </div>
             )}
-            <span className={`px-4 py-1 text-sm font-semibold rounded-full ${
-              selectedCustomer.status === 'active'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {selectedCustomer.status || 'active'}
-            </span>
+
           </div>
 
           <div className="md:w-2/3 md:pl-8">
@@ -439,31 +297,10 @@ const CustomerManagement = () => {
 
             <div className="mt-8 flex space-x-4">
               <button
-                onClick={() => handleEditCustomer(selectedCustomer)}
+                onClick={() => setViewMode('list')}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
               >
-                <FaEdit className="mr-2" />
-                Edit Customer
-              </button>
-              <button
-                onClick={() => handleToggleStatus(selectedCustomer._id, selectedCustomer.status)}
-                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                  selectedCustomer.status === 'active'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500`}
-              >
-                {selectedCustomer.status === 'active' ? (
-                  <>
-                    <FaBan className="mr-2" />
-                    Deactivate Customer
-                  </>
-                ) : (
-                  <>
-                    <FaCheck className="mr-2" />
-                    Activate Customer
-                  </>
-                )}
+                Back to Customer List
               </button>
             </div>
           </div>
@@ -473,116 +310,6 @@ const CustomerManagement = () => {
           <h3 className="text-lg font-semibold mb-4">Recent Rides</h3>
           <p className="text-gray-500">No recent rides found for this customer.</p>
         </div>
-      </div>
-    );
-  };
-
-  // Render edit form
-  const renderEditForm = () => {
-    if (!selectedCustomer) return null;
-    
-    return (
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold">Edit Customer</h3>
-          <button
-            onClick={() => setViewMode('details')}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back to Details
-          </button>
-        </div>
-
-        <form onSubmit={handleUpdateCustomer}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={editForm.name}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={editForm.email}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone
-              </label>
-              <input
-                type="text"
-                name="phone"
-                value={editForm.phone}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Address
-              </label>
-              <input
-                type="text"
-                name="address"
-                value={editForm.address}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                name="status"
-                value={editForm.status}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-8 flex space-x-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              {loading ? (
-                <>
-                  <FaSpinner className="animate-spin mr-2" />
-                  Updating...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('details')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
       </div>
     );
   };
@@ -609,7 +336,6 @@ const CustomerManagement = () => {
         <>
           {viewMode === 'list' && renderCustomerList()}
           {viewMode === 'details' && renderCustomerDetails()}
-          {viewMode === 'edit' && renderEditForm()}
         </>
       )}
     </div>

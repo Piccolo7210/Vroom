@@ -50,7 +50,7 @@ const RideManagement = () => {
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
       if (filters.endDate) queryParams.append('endDate', filters.endDate);
       
-      const response = await fetch(`/api/admin/rides?${queryParams.toString()}`, {
+      const response = await fetch(`http://localhost:5000/api/admin/rides?${queryParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

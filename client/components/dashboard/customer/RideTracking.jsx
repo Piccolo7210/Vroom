@@ -7,6 +7,7 @@ import RideService from '@/app/lib/rideService';
 import SocketService from '@/app/lib/socketService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import PaymentSelectionModal from './PaymentSelectionModal';
 import dynamic from 'next/dynamic';
 
 // Dynamically import RideMap to avoid SSR issues
@@ -30,11 +31,14 @@ const RideTracking = ({ rideId, onRideComplete }) => {
   const [estimatedArrival, setEstimatedArrival] = useState(null);
   const [currentDistance, setCurrentDistance] = useState(null);
   const [tripProgress, setTripProgress] = useState(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [customerProfile, setCustomerProfile] = useState(null);
   const socketConnected = useRef(false);
 
   useEffect(() => {
     if (rideId) {
       fetchRideDetails();
+      fetchCustomerProfile();
       setupRealTimeTracking();
     } else {
       setLoading(false); // No rideId, so stop loading
@@ -47,14 +51,25 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
   // Handle ride completion/cancellation
   useEffect(() => {
-    if (ride && (ride.status === 'completed' || ride.status === 'cancelled') && onRideComplete) {
+    if (ride && ride.status === 'completed' && ride.payment_status === 'pending' && customerProfile) {
+      // Check if customer has multiple payment methods or only cash
+      const paymentMethods = customerProfile.payment_methods || ['cash'];
+      
+      if (paymentMethods.length > 1 || (paymentMethods.length === 1 && !paymentMethods.includes('cash'))) {
+        // Show payment selection modal if customer has multiple payment methods or only non-cash methods
+        setShowPaymentModal(true);
+      } else if (paymentMethods.includes('cash') && paymentMethods.length === 1) {
+        // Auto-complete payment with cash if it's the only method
+        handleCashPaymentAuto();
+      }
+    } else if (ride && ride.status === 'cancelled' && onRideComplete) {
       const timer = setTimeout(() => {
         onRideComplete();
-      }, 3000); // Show completion message for 3 seconds before clearing
+      }, 3000); // Show cancellation message for 3 seconds before clearing
       
       return () => clearTimeout(timer);
     }
-  }, [ride?.status, onRideComplete]);
+  }, [ride?.status, ride?.payment_status, customerProfile, onRideComplete]);
 
   const fetchRideDetails = async () => {
     try {
@@ -75,6 +90,83 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCustomerProfile = async () => {
+    try {
+      // Get customer username from localStorage or ride data
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      const userName = userData.userName || ride?.customer?.userName;
+      
+      if (userName) {
+        const response = await RideService.getCustomerProfile(userName);
+        if (response.success) {
+          setCustomerProfile(response.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customer profile:', error);
+      // Set default profile if fetch fails
+      setCustomerProfile({ payment_methods: ['cash'] });
+    }
+  };
+
+  const handleCashPaymentAuto = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`http://localhost:5000/api/rides/${ride._id}/payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          paymentMethod: 'cash',
+          paymentStatus: 'completed'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process cash payment');
+      }
+
+      const result = await response.json();
+      
+      toast.success('Cash payment completed successfully!');
+      
+      // Update ride state
+      setRide(result.data.ride);
+      
+      // Clear ride after a delay
+      setTimeout(() => {
+        if (onRideComplete) {
+          onRideComplete();
+        }
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Auto cash payment error:', error);
+      toast.error('Failed to process cash payment. Please try again.');
+    }
+  };
+
+  const handlePaymentMethodSelect = (paymentMethod) => {
+    // PaymentSelectionModal handles the actual payment processing
+    // This function receives the updated ride data after successful payment
+    console.log('Payment method selected:', paymentMethod);
+  };
+
+  const handlePaymentComplete = (updatedRide) => {
+    setRide(updatedRide);
+    setShowPaymentModal(false);
+    
+    // Clear ride after showing success message
+    setTimeout(() => {
+      if (onRideComplete) {
+        onRideComplete();
+      }
+    }, 2000);
   };
 
   const fetchDriverLocation = async () => {
@@ -130,8 +222,8 @@ const RideTracking = ({ rideId, onRideComplete }) => {
             toast.info('🚀 Ride started! Heading to destination');
             break;
           case 'completed':
-            toast.success('✅ Ride completed! Thank you for using our service');
-            onRideComplete && onRideComplete();
+            toast.success('✅ Ride completed! Please complete your payment');
+            // Don't auto-call onRideComplete here, let the payment flow handle it
             break;
           case 'cancelled':
             toast.error('❌ Ride has been cancelled');
@@ -349,52 +441,68 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     );
   }
 
-  // Show "No Active Ride" for completed or cancelled rides
-  if (ride.status === 'completed' || ride.status === 'cancelled') {
+  // Show "No Active Ride" for completed or cancelled rides (only if payment is also completed)
+  if (ride && ride.status === 'completed' && ride.payment_status === 'completed') {
     return (
       <Card className="p-8 text-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-            ride.status === 'completed' ? 'bg-green-100' : 'bg-red-100'
-          }`}>
-            {ride.status === 'completed' ? (
-              <FaCar className={`text-2xl text-green-600`} />
-            ) : (
-              <FaCar className={`text-2xl text-red-600`} />
-            )}
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-green-100">
+            <FaCar className="text-2xl text-green-600" />
           </div>
           
           <div>
             <h3 className="text-xl font-semibold text-gray-800 mb-2">
-              {ride.status === 'completed' ? 'Ride Completed Successfully!' : 'Ride Cancelled'}
+              Ride Completed Successfully!
             </h3>
             <p className="text-gray-600 mb-4">
-              {ride.status === 'completed' 
-                ? 'Thank you for choosing Vroom! This page will refresh shortly.' 
-                : 'Your ride was cancelled. This page will refresh shortly.'
-              }
+              Thank you for choosing Vroom! Payment has been processed successfully.
             </p>
             
-            {ride.status === 'completed' && (
-              <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">From:</span>
-                  <span className="font-medium">{ride.pickup_location.address}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">To:</span>
-                  <span className="font-medium">{ride.destination.address}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">Fare:</span>
-                  <span className="font-medium text-green-600">৳{ride.fare.total_fare}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Completed:</span>
-                  <span className="font-medium">{formatTime(ride.ride_completed_at)}</span>
-                </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-sm">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">From:</span>
+                <span className="font-medium">{ride.pickup_location.address}</span>
               </div>
-            )}
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">To:</span>
+                <span className="font-medium">{ride.destination.address}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Fare:</span>
+                <span className="font-medium text-green-600">৳{ride.fare.total_fare}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Payment:</span>
+                <span className="font-medium text-green-600 capitalize">{ride.payment_method}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Completed:</span>
+                <span className="font-medium">{formatTime(ride.ride_completed_at)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            Redirecting to booking page...
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (ride && ride.status === 'cancelled') {
+    return (
+      <Card className="p-8 text-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-red-100">
+            <FaCar className="text-2xl text-red-600" />
+          </div>
+          
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Ride Cancelled</h3>
+            <p className="text-gray-600 mb-4">
+              Your ride was cancelled. This page will refresh shortly.
+            </p>
           </div>
           
           <p className="text-sm text-gray-500">
@@ -720,6 +828,16 @@ const RideTracking = ({ rideId, onRideComplete }) => {
           })}
         </div>
       </Card>
+
+      {/* Payment Selection Modal */}
+      {showPaymentModal && (
+        <PaymentSelectionModal
+          ride={ride}
+          customerPaymentMethods={customerProfile?.payment_methods || ['cash']}
+          onClose={() => setShowPaymentModal(false)}
+          onPaymentComplete={handlePaymentComplete}
+        />
+      )}
     </div>
   );
 };

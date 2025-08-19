@@ -8,7 +8,8 @@ import {
   getCustomerRideHistory,
   cancelRide,
   getFareEstimate,
-  getAllVehicleFareEstimates
+  getAllVehicleFareEstimates,
+  updatePaymentStatus
 } from '../controllers/rideController.js';
 import {
   updateDriverLocation,
@@ -57,6 +58,9 @@ router.get('/:ride_id/location', getDriverLocation);
 
 // Get ride details (MUST come after specific routes)
 router.get('/:ride_id', getRideDetails);
+
+// Update payment status for a ride
+router.post('/:ride_id/payment', protectCustomer, updatePaymentStatus);
 
 // Accept a ride
 router.put('/:ride_id/accept', protectDriver, acceptRide);

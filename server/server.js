@@ -9,6 +9,7 @@ import customerRoutes from "./routes/customerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import passwordRoutes from "./routes/passwordRoutes.js";
 import rideRoutes from "./routes/rideRoutes.js";
+import bkashPaymentRoutes from "./routes/bkashPaymentRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -36,6 +37,7 @@ app.use('/api/customer', customerRoutes); // Customer routes
 app.use('/api/admin', adminRoutes); // Admin routes
 app.use('/api/password',passwordRoutes); // Password routes
 app.use('/api/rides', rideRoutes); // Ride routes
+app.use('/api/payment', bkashPaymentRoutes);
 // Database connection
 mongoose.connect(MONGODB_URI).then(()=>console.log("MongoDB is connected")).catch((e) => console.log(e));
 
