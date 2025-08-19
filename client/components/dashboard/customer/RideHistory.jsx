@@ -1,16 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaHistory, FaMapMarkerAlt, FaCar, FaCalendarAlt, FaMoneyBillWave, FaSpinner } from 'react-icons/fa';
+import { FaHistory, FaMapMarkerAlt, FaCar, FaCalendarAlt, FaMoneyBillWave, FaSpinner, FaCreditCard } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import RideService from '@/app/lib/rideService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import PaymentSelectionModal from './PaymentSelectionModal';
 
 const RideHistory = () => {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedRide, setSelectedRide] = useState(null);
 
   useEffect(() => {
     fetchRideHistory();
@@ -88,6 +91,26 @@ const RideHistory = () => {
       default:
         return '🚗';
     }
+  };
+
+  const handlePaymentClick = async (ride) => {
+    setSelectedRide(ride);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentComplete = (updatedRide) => {
+    // Update the ride in the list
+    setRides(prevRides => 
+      prevRides.map(ride => 
+        ride._id === updatedRide._id ? updatedRide : ride
+      )
+    );
+    setShowPaymentModal(false);
+    setSelectedRide(null);
+    toast.success('Payment completed successfully!');
+    
+    // Refresh ride history to get updated data
+    fetchRideHistory();
   };
 
   const filteredRides = rides.filter(ride => {
@@ -279,10 +302,41 @@ const RideHistory = () => {
                   </div>
                 </div>
               )}
+
+              {/* Payment Button for completed rides with pending payment */}
+              {ride.status === 'completed' && ride.payment_status === 'pending' && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-yellow-800">Payment Required</span>
+                      <p className="text-xs text-yellow-600">Complete your payment for this ride</p>
+                    </div>
+                    <Button
+                      onClick={() => handlePaymentClick(ride)}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      size="sm"
+                    >
+                      <FaCreditCard className="mr-2" />
+                      Pay Now
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
       )}
+
+      {/* Payment Modal */}
+      <PaymentSelectionModal
+        isOpen={showPaymentModal}
+        rideId={selectedRide?._id}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedRide(null);
+        }}
+        onPaymentComplete={handlePaymentComplete}
+      />
     </div>
   );
 };

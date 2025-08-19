@@ -1,0 +1,232 @@
+/* Payment Module Specific Styles */
+
+.payment-container {
+  @apply min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50;
+}
+
+.payment-card {
+  @apply bg-white rounded-2xl shadow-xl border border-gray-100;
+}
+
+.payment-header {
+  @apply flex items-center justify-between p-6 border-b border-gray-100;
+}
+
+.payment-body {
+  @apply p-6 space-y-6;
+}
+
+.payment-footer {
+  @apply p-6 pt-0 space-y-4;
+}
+
+.payment-method-button {
+  @apply w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 cursor-pointer;
+}
+
+.payment-method-button.active {
+  @apply border-blue-500 bg-blue-50;
+}
+
+.payment-method-button.disabled {
+  @apply opacity-50 cursor-not-allowed hover:border-gray-200 hover:bg-transparent;
+}
+
+.payment-summary {
+  @apply bg-gray-50 rounded-xl p-4 space-y-3;
+}
+
+.payment-summary-row {
+  @apply flex justify-between items-center;
+}
+
+.payment-total {
+  @apply border-t border-gray-200 pt-3 mt-3;
+}
+
+.payment-amount {
+  @apply text-2xl font-bold text-blue-600;
+}
+
+.payment-button {
+  @apply w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.payment-button.cash {
+  @apply bg-green-600 hover:bg-green-700;
+}
+
+.payment-button.bkash {
+  @apply bg-pink-600 hover:bg-pink-700;
+}
+
+.payment-processing {
+  @apply flex flex-col items-center space-y-4 text-center;
+}
+
+.payment-success {
+  @apply flex flex-col items-center space-y-4 text-center text-green-600;
+}
+
+.payment-error {
+  @apply flex flex-col items-center space-y-4 text-center text-red-600;
+}
+
+/* bKash Specific Styles */
+.bkash-container {
+  @apply min-h-screen bg-gradient-to-br from-pink-50 to-red-50;
+}
+
+.bkash-logo {
+  @apply w-20 h-20 bg-pink-600 rounded-2xl flex items-center justify-center;
+}
+
+.bkash-form-group {
+  @apply space-y-2;
+}
+
+.bkash-input {
+  @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500;
+}
+
+.bkash-button {
+  @apply w-full bg-pink-600 hover:bg-pink-700 text-white py-3 text-lg font-semibold rounded-lg transition-colors duration-200;
+}
+
+.bkash-processing {
+  @apply flex flex-col items-center space-y-4 text-center;
+}
+
+.bkash-success {
+  @apply flex flex-col items-center space-y-4 text-center;
+}
+
+.bkash-error {
+  @apply flex flex-col items-center space-y-4 text-center;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .payment-container {
+    @apply p-4;
+  }
+  
+  .payment-card {
+    @apply mx-2;
+  }
+  
+  .payment-header {
+    @apply p-4;
+  }
+  
+  .payment-body {
+    @apply p-4;
+  }
+  
+  .payment-footer {
+    @apply p-4 pt-0;
+  }
+}
+
+/* Animation Classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+.pulse-ring {
+  animation: pulseRing 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.33);
+  }
+  40%,
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.33);
+  }
+}
+
+/* Loading Spinner */
+.payment-spinner {
+  @apply inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin;
+}
+
+/* Success Checkmark Animation */
+.checkmark {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: block;
+  stroke-width: 2;
+  stroke: #10b981;
+  stroke-miterlimit: 10;
+  box-shadow: inset 0px 0px 0px #10b981;
+  animation: fill 0.4s ease-in-out 0.4s forwards, scale 0.3s ease-in-out 0.9s both;
+}
+
+.checkmark__circle {
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  stroke-width: 2;
+  stroke-miterlimit: 10;
+  stroke: #10b981;
+  fill: none;
+  animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark__check {
+  transform-origin: 50% 50%;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+}
+
+@keyframes stroke {
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes scale {
+  0%, 100% {
+    transform: none;
+  }
+  50% {
+    transform: scale3d(1.1, 1.1, 1);
+  }
+}
+
+@keyframes fill {
+  100% {
+    box-shadow: inset 0px 0px 0px 30px #10b981;
+  }
+}

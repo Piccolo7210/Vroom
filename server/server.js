@@ -9,18 +9,15 @@ import customerRoutes from "./routes/customerRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import passwordRoutes from "./routes/passwordRoutes.js";
 import rideRoutes from "./routes/rideRoutes.js";
+import bkashPaymentRoutes from "./routes/bkashPaymentRoutes.js";
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://192.168.0.104:3000'
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST", "PUT", "DELETE"]
   }
 });
 
@@ -28,26 +25,19 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 // Middleware
 app.use(
-  cors({
-    origin: [
-      'http://localhost:3000',
-      'http://192.168.0.104:3000'
-    ],
-    methods: ['GET','POST','DELETE','PUT'],
-    allowedHeaders: ['Content-Type','Authorization'],
-    credentials: true
-  })
-);
+      cors({
+          origin: process.env.CLIENT_URL,
+          methods: ["GET","POST","DELETE","PUT"],
+          allowedHeaders: ["Content-Type","Authorization"],
+      })
+  );
 app.use(express.json()); // JSON body parsing
-
-// Make Socket.IO instance available to controllers
-app.set('socketio', io);
-
 app.use('/api/driver', driverRoutes); // Driver routes
 app.use('/api/customer', customerRoutes); // Customer routes
 app.use('/api/admin', adminRoutes); // Admin routes
 app.use('/api/password',passwordRoutes); // Password routes
 app.use('/api/rides', rideRoutes); // Ride routes
+app.use('/api/payment', bkashPaymentRoutes);
 // Database connection
 mongoose.connect(MONGODB_URI).then(()=>console.log("MongoDB is connected")).catch((e) => console.log(e));
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaPen, FaCamera } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaPen, FaCamera, FaCreditCard, FaMoneyBillWave } from 'react-icons/fa';
 import { useState, useEffect, useRef } from 'react';
 
 const CustomerProfile = ({ userName }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     present_address: '',
+    payment_methods: ['cash'],
   });
   const [photoUrl, setPhotoUrl] = useState('');
   const [profileData, setProfileData] = useState(null);
@@ -30,7 +31,10 @@ const CustomerProfile = ({ userName }) => {
         const data = await response.json();
         if (data.success) {
           setProfileData(data.data);
-          setFormData({ present_address: data.data.present_address || '' });
+          setFormData({ 
+            present_address: data.data.present_address || '',
+            payment_methods: data.data.payment_methods || ['cash']
+          });
           setPhotoUrl(data.data.photo_link || '');
         }
       } catch (error) {
@@ -119,6 +123,27 @@ const CustomerProfile = ({ userName }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handlePaymentMethodChange = (method) => {
+    setFormData((prev) => {
+      const currentMethods = prev.payment_methods || [];
+      let newMethods;
+      
+      if (currentMethods.includes(method)) {
+        // Remove the method if it's already selected (but ensure at least one remains)
+        newMethods = currentMethods.filter(m => m !== method);
+        if (newMethods.length === 0) {
+          // Don't allow removing all payment methods
+          return prev;
+        }
+      } else {
+        // Add the method if it's not selected
+        newMethods = [...currentMethods, method];
+      }
+      
+      return { ...prev, payment_methods: newMethods };
+    });
+  };
+
   const handleSaveChanges = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -128,7 +153,11 @@ const CustomerProfile = ({ userName }) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ userName: userName.toLowerCase(), present_address: formData.present_address }),
+        body: JSON.stringify({ 
+          userName: userName.toLowerCase(), 
+          present_address: formData.present_address,
+          payment_methods: formData.payment_methods
+        }),
       });
 
       if (!response.ok) {
@@ -230,6 +259,55 @@ const CustomerProfile = ({ userName }) => {
               <div className="flex items-center text-gray-700">
                 <span className="mr-2 font-medium">Gender:</span>
                 <span className="capitalize">{profileData?.sex || 'Not specified'}</span>
+              </div>
+
+              {/* Payment Methods Section */}
+              <div className="col-span-1 md:col-span-2">
+                <div className="flex items-start text-gray-700">
+                  <FaCreditCard className="mr-2 text-blue-500 mt-1" />
+                  <div className="flex-1">
+                    <span className="font-medium">Payment Methods:</span>
+                    {isEditing ? (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap gap-3">
+                          {['cash', 'bkash', 'card'].map((method) => (
+                            <label key={method} className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={(formData.payment_methods || []).includes(method)}
+                                onChange={() => handlePaymentMethodChange(method)}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="flex items-center space-x-1">
+                                {method === 'cash' && <FaMoneyBillWave className="text-green-500" />}
+                                {method === 'bkash' && <span className="text-pink-500 font-bold text-sm">bKash</span>}
+                                {method === 'card' && <FaCreditCard className="text-blue-500" />}
+                                <span className="capitalize">{method}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          At least one payment method must be selected
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {(profileData?.payment_methods || ['cash']).map((method) => (
+                          <span
+                            key={method}
+                            className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                          >
+                            {method === 'cash' && <FaMoneyBillWave />}
+                            {method === 'bkash' && <span className="font-bold">bK</span>}
+                            {method === 'card' && <FaCreditCard />}
+                            <span className="capitalize">{method}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

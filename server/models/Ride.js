@@ -118,26 +118,6 @@ const rideSchema = new mongoose.Schema({
   otp: {
     type: String,
     length: 4
-  },
-  driver_location: {
-    latitude: {
-      type: Number
-    },
-    longitude: {
-      type: Number
-    },
-    heading: {
-      type: Number,
-      default: 0
-    },
-    speed: {
-      type: Number,
-      default: 0
-    },
-    timestamp: {
-      type: Date,
-      default: Date.now
-    }
   }
 }, {
   timestamps: true

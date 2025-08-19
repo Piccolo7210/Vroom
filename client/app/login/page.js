@@ -37,7 +37,7 @@ export default function LoginPage() {
       
       // Try driver login first
       try {
-        const driverResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/driver/login`, {
+        const driverResponse = await fetch('http://localhost:5000/api/driver/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -47,10 +47,39 @@ export default function LoginPage() {
         
         const driverResult = await driverResponse.json();
         
+        // Handle driver verification statuses
+        if (driverResponse.status === 403 && driverResult.verificationStatus === 'rejected') {
+          // Rejected driver - store rejection reason and redirect to rejection page
+          localStorage.setItem('userType', 'driver');
+          localStorage.setItem('userData', JSON.stringify({ 
+            ...driverResult.data,
+            rejectionReason: driverResult.message 
+          }));
+          
+          toast.error('Account access denied');
+          setTimeout(() => {
+            router.push(`/dashboard/driver/rejected`);
+          }, 1000);
+          return;
+        }
+        
+        if (driverResponse.status === 202 && driverResult.verificationStatus === 'waiting') {
+          // Waiting for verification - redirect to waiting page
+          localStorage.setItem('userType', 'driver');
+          localStorage.setItem('userData', JSON.stringify(driverResult.data));
+          
+          toast.info('Account pending verification');
+          setTimeout(() => {
+            router.push(`/dashboard/driver/waiting`);
+          }, 1000);
+          return;
+        }
+        
         if (driverResponse.ok) {
+          // Verified driver - proceed to dashboard
           localStorage.setItem('token', driverResult.token);
           localStorage.setItem('userType', 'driver');
-          localStorage.setItem('userData', JSON.stringify(driverResult.driver || driverResult.data));
+          localStorage.setItem('userData', JSON.stringify(driverResult.data));
           
           setIsSuccess(true);
           toast.success('Login successful!!!');
@@ -62,11 +91,12 @@ export default function LoginPage() {
         }
       } catch (driverError) {
         // If driver login fails, continue to customer login
+        console.error("Driver login error:", driverError);
       }
       
       // Try customer login
       try {
-        const customerResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/login`, {
+        const customerResponse = await fetch('http://localhost:5000/api/customer/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

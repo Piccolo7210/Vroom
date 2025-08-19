@@ -15,7 +15,7 @@ const AdminLoginPage = () => {
     setError('');
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/login`, {
+      const response = await fetch(`http://localhost:5000/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -31,7 +31,8 @@ const AdminLoginPage = () => {
         const userData = {
           name: data.name,
           userName: data.userName,
-          email: data.email
+          email: data.email,
+          role: 'admin' // Explicitly store the role
         };
         localStorage.setItem('userData', JSON.stringify(userData));
         

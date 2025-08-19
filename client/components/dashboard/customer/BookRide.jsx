@@ -24,7 +24,6 @@ const MapLocationSelector = dynamic(
 );
 
 const BookRide = ({ userName, onRideBooked }) => {
-  
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -83,42 +82,25 @@ const BookRide = ({ userName, onRideBooked }) => {
 
   // Get current location and set as default pickup
   useEffect(() => {
-    // Check if we're on HTTPS or localhost (required for geolocation)
-    const isSecureContext = window.location.protocol === 'https:' || 
-                           window.location.hostname === 'localhost' || 
-                           window.location.hostname === '127.0.0.1' ||
-                           window.location.hostname.includes('192.168');
-
-    if (!isSecureContext) {
-      toast.warning('Location access requires a secure connection. Please enter your location manually.');
-      return;
-    }
-
     if (navigator.geolocation) {
       setGettingLocation(true);
       
-      // Mobile-optimized geolocation options
+      // Enhanced geolocation options for better accuracy
       const options = {
         enableHighAccuracy: true,
-        timeout: 20000, // Increased to 20 seconds for mobile
-        maximumAge: 60000 // 1 minute cache for mobile efficiency
+        timeout: 15000, // 15 seconds timeout
+        maximumAge: 30000 // 30 seconds cache max age
       };
-      
-      // Check permissions first (if available)
-      if ('permissions' in navigator) {
-        navigator.permissions.query({ name: 'geolocation' }).then(result => {
-          if (result.state === 'denied') {
-            toast.error('Location access is denied. Please enable location permissions in your browser settings and refresh the page.');
-            setGettingLocation(false);
-            return;
-          }
-        }).catch(err => {
-          // Permission query not supported on this browser
-        });
-      }
       
       navigator.geolocation.getCurrentPosition(
         async (position) => {
+          console.log('GPS Location detected:', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date(position.timestamp).toLocaleString()
+          });
+          
           const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -132,6 +114,7 @@ const BookRide = ({ userName, onRideBooked }) => {
               `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.lat}&lon=${location.lng}&zoom=18&addressdetails=1&accept-language=en`
             );
             const data = await response.json();
+            console.log('Address lookup result:', data);
             
             const address = data?.display_name || `Current Location (${location.lat.toFixed(6)}, ${location.lng.toFixed(6)})`;
             
@@ -139,6 +122,7 @@ const BookRide = ({ userName, onRideBooked }) => {
             setPickup(address);
             toast.success(`Current location set (accuracy: ${Math.round(location.accuracy)}m)`);
           } catch (error) {
+            console.error('Address lookup failed:', error);
             const fallbackAddress = `Current Location (${location.lat.toFixed(6)}, ${location.lng.toFixed(6)})`;
             setPickupCoords(location);
             setPickup(fallbackAddress);
@@ -147,28 +131,22 @@ const BookRide = ({ userName, onRideBooked }) => {
           setGettingLocation(false);
         },
         (error) => {
+          console.error('Geolocation error:', error);
           let errorMessage = 'Could not detect your current location automatically';
-          let userAction = 'You can enter your pickup location manually.';
           
           switch(error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage = 'Location access denied';
-              userAction = 'Please enable location permissions in your browser settings and refresh the page, or enter your location manually.';
+              errorMessage = 'Location access denied. Please enable location permissions.';
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable';
-              userAction = 'Please check your device GPS settings or enter your location manually.';
+              errorMessage = 'Location information unavailable. Please try again.';
               break;
             case error.TIMEOUT:
-              errorMessage = 'Location detection timed out';
-              userAction = 'Please try again or enter your location manually.';
+              errorMessage = 'Location detection timed out. Please try again.';
               break;
-            default:
-              errorMessage = 'Unknown geolocation error';
-              userAction = 'Please enter your pickup location manually.';
           }
           
-          toast.warn(`${errorMessage}. ${userAction}`);
+          toast.warn(errorMessage);
           setGettingLocation(false);
         },
         options
@@ -200,45 +178,30 @@ const BookRide = ({ userName, onRideBooked }) => {
   };
 
   const useCurrentLocation = () => {
-    // Check if we're on HTTPS or localhost (required for geolocation)
-    const isSecureContext = window.location.protocol === 'https:' || 
-                           window.location.hostname === 'localhost' || 
-                           window.location.hostname === '127.0.0.1' ||
-                           window.location.hostname.includes('192.168');
-
-    if (!isSecureContext) {
-      toast.error('Location access requires a secure connection (HTTPS). Please enter your location manually.');
-      return;
-    }
-
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by this browser');
       return;
     }
     
     setGettingLocation(true);
-    toast.info('📍 Requesting location access... Please allow when prompted.');
+    toast.info('Getting your precise location...');
     
-    // Check permissions first
-    if ('permissions' in navigator) {
-      navigator.permissions.query({ name: 'geolocation' }).then(result => {
-        if (result.state === 'denied') {
-          toast.error('❌ Location access is blocked. Please:\n1. Click the location icon in your address bar\n2. Select "Allow" for location\n3. Refresh the page and try again');
-          setGettingLocation(false);
-          return;
-        }
-      });
-    }
-    
-    // Mobile-optimized geolocation options for manual request
+    // Enhanced geolocation options for manual location request
     const options = {
       enableHighAccuracy: true,
-      timeout: 25000, // 25 seconds timeout for manual request on mobile
+      timeout: 20000, // 20 seconds timeout for manual request
       maximumAge: 0 // Force fresh location reading
     };
     
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        console.log('Manual GPS Location:', {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date(position.timestamp).toLocaleString()
+        });
+        
         const location = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -252,6 +215,7 @@ const BookRide = ({ userName, onRideBooked }) => {
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.lat}&lon=${location.lng}&zoom=18&addressdetails=1&accept-language=en`
           );
           const data = await response.json();
+          console.log('Manual address lookup:', data);
           
           const address = data?.display_name || `Current Location (${location.lat.toFixed(6)}, ${location.lng.toFixed(6)})`;
           
@@ -259,6 +223,7 @@ const BookRide = ({ userName, onRideBooked }) => {
           setPickup(address);
           toast.success(`Location updated! Accuracy: ${Math.round(location.accuracy)} meters`);
         } catch (error) {
+          console.error('Address lookup failed:', error);
           const fallbackAddress = `Current Location (${location.lat.toFixed(6)}, ${location.lng.toFixed(6)})`;
           setPickupCoords(location);
           setPickup(fallbackAddress);
@@ -268,6 +233,7 @@ const BookRide = ({ userName, onRideBooked }) => {
         setGettingLocation(false);
       },
       (error) => {
+        console.error('Manual geolocation error:', error);
         let errorMessage = 'Failed to get your current location';
         
         switch(error.code) {
@@ -340,6 +306,7 @@ const BookRide = ({ userName, onRideBooked }) => {
         toast.error('Failed to get fare estimates');
       }
     } catch (error) {
+      console.error('Error getting fare estimates:', error);
       toast.error('Failed to get fare estimates');
     } finally {
       setLoading(false);
@@ -395,20 +362,12 @@ const BookRide = ({ userName, onRideBooked }) => {
         toast.error(response.error || 'Failed to book ride');
       }
     } catch (error) {
+      console.error('Error booking ride:', error);
       toast.error('Failed to book ride');
     } finally {
       setBookingRide(false);
     }
   };
-
-  // Permission state check on mount
-  useEffect(() => {
-    if ('permissions' in navigator && navigator.permissions?.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then((res) => {
-        // Permission state available for internal use
-      }).catch(() => {});
-    }
-  }, []);
 
   if (activeRide) {
     return (
@@ -495,19 +454,17 @@ const BookRide = ({ userName, onRideBooked }) => {
       {/* Location Selection */}
       <Card className="p-6 mb-6">
         <div className="space-y-4">
-          {/* Mobile Location Access Guidance */}
-          {!currentLocation && (
+          {/* Debug info */}
+          {currentLocation && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm text-blue-800">
-                <strong>📱 Enable Location Access:</strong><br/>
-                1. Click the blue 📍 button next to the pickup field below<br/>
-                2. When your browser asks, tap <strong>"Allow"</strong> for location<br/>
-                3. If you accidentally blocked it:<br/>
-                   &nbsp;&nbsp;&nbsp;• Tap the 🔒 or ⚠️ icon in your address bar<br/>
-                   &nbsp;&nbsp;&nbsp;• Enable "Location" permissions<br/>
-                   &nbsp;&nbsp;&nbsp;• Refresh this page<br/>
-                <span className="text-xs text-blue-600 mt-1 block">
-                  💡 Location is needed for accurate pickup and real-time tracking
+                <strong>Current Location Detected:</strong><br/>
+                📍 Coordinates: {currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}<br/>
+                🎯 Accuracy: {currentLocation.accuracy ? `${Math.round(currentLocation.accuracy)} meters` : 'Unknown'}<br/>
+                <span className="text-xs text-blue-600">
+                  {currentLocation.accuracy < 50 ? '✅ High accuracy' : 
+                   currentLocation.accuracy < 200 ? '⚠️ Medium accuracy' : 
+                   '❌ Low accuracy - consider moving closer to a window'}
                 </span>
               </div>
             </div>
@@ -515,14 +472,7 @@ const BookRide = ({ userName, onRideBooked }) => {
           
           {/* Pickup Location */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Pickup Location 
-              {!currentLocation && (
-                <span className="text-blue-600 font-normal text-xs ml-2">
-                  👉 Click the blue 📍 button to get your location
-                </span>
-              )}
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Pickup Location</label>
             <div className="relative">
               <FaMapMarkerAlt className="absolute left-3 top-3 text-green-500" />
               <input
@@ -538,14 +488,13 @@ const BookRide = ({ userName, onRideBooked }) => {
                   onClick={useCurrentLocation}
                   variant="outline"
                   size="sm"
-                  disabled={gettingLocation}
-                  className="p-1 bg-blue-50 hover:bg-blue-100 border-blue-300"
-                  title="Get my current location"
+                  disabled={gettingLocation || !currentLocation}
+                  className="p-1"
                 >
                   {gettingLocation ? (
-                    <FaSpinner className="animate-spin w-4 h-4 text-blue-600" />
+                    <FaSpinner className="animate-spin w-4 h-4" />
                   ) : (
-                    <FaLocationArrow className="w-4 h-4 text-blue-600" />
+                    <FaLocationArrow className="w-4 h-4" />
                   )}
                 </Button>
                 <Button
@@ -573,6 +522,18 @@ const BookRide = ({ userName, onRideBooked }) => {
                   </button>
                 ))}
               </div>
+              
+              {/* Location accuracy indicator */}
+              {pickupCoords && (
+                <div className="mt-2 text-xs text-gray-600">
+                  📍 Selected: {pickupCoords.lat.toFixed(6)}, {pickupCoords.lng.toFixed(6)}
+                  {pickupCoords.accuracy && (
+                    <span className="ml-2">
+                      (±{Math.round(pickupCoords.accuracy)}m)
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

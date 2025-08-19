@@ -38,7 +38,7 @@ export default function CustomerSignupPage() {
       try {
         setCheckingUsername(true);
         // Call your API endpoint to check if username exists
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/check-username?userName=${encodeURIComponent(usernameValue)}`);
+        const response = await fetch(`http://localhost:5000/api/customer/check-username?userName=${encodeURIComponent(usernameValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -71,7 +71,7 @@ useEffect(() => {
       try {
         setCheckingEmail(true);
         // Call API endpoint to check if email exists
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/check-email?email=${encodeURIComponent(emailValue)}`);
+        const response = await fetch(`http://localhost:5000/api/customer/check-email?email=${encodeURIComponent(emailValue)}`);
         const data = await response.json();
         
         if (!response.ok) {
@@ -101,7 +101,7 @@ useEffect(() => {
       setLoading(true);
       const { confirmPassword, ...customerData } = data;
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/register`, {
+      const response = await fetch('http://localhost:5000/api/customer/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

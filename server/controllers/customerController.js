@@ -256,7 +256,7 @@ export const registerCustomer = async (req, res) => {
     const token = jwt.sign(
       { id: customer._id, role: 'customer' },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
     
     res.status(201).json({
@@ -305,7 +305,7 @@ export const loginCustomer = async (req, res) => {
     const token = jwt.sign(
       { id: customer._id, role: 'customer' },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
     
     res.json({
@@ -330,11 +330,27 @@ export const loginCustomer = async (req, res) => {
 
 export const getProfileData = async (req, res) => {
   try {
-    const { userName } = req.params; // Get userName from URL parameter
-    const customer = await Customer.findOne({ userName: userName.toLowerCase() }).select('-password');
+    let customer;
+    
+    // Check if customer comes from middleware (protected route)
+    if (req.customer) {
+      customer = req.customer;
+      console.log('Using customer from middleware:', customer.userName);
+      console.log('Customer payment_methods from middleware:', customer.payment_methods);
+    } else {
+      // Get userName from URL parameter (legacy route)
+      const { userName } = req.params;
+      customer = await Customer.findOne({ userName: userName.toLowerCase() }).select('-password');
+      console.log('Fetched customer from DB by username:', customer?.userName);
+      console.log('Customer payment_methods from DB:', customer?.payment_methods);
+    }
+    
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
+    
+    console.log('Final payment_methods being sent:', customer.payment_methods);
+    
     res.json({
       success: true,
       data: {
@@ -345,6 +361,7 @@ export const getProfileData = async (req, res) => {
         phone: customer.phone,
         sex: customer.sex,
         present_address: customer.present_address,
+        payment_methods: customer.payment_methods,
         photo_link: customer.photo_link
       }
     });
@@ -357,14 +374,34 @@ export const getProfileData = async (req, res) => {
 // Update customer profile
 export const updateCustomerProfile = async (req, res) => {
   try {
-    const { userName, present_address } = req.body; // Accept userName and present_address from request body
+    const { userName, present_address, payment_methods } = req.body; // Accept userName, present_address, and payment_methods from request body
     if (!userName || !present_address) {
       return res.status(400).json({ error: 'userName and present_address are required' });
     }
 
+    // Validate payment methods if provided
+    if (payment_methods) {
+      const validMethods = ['cash', 'bkash', 'card'];
+      const isValidMethods = Array.isArray(payment_methods) && 
+                           payment_methods.length > 0 && 
+                           payment_methods.every(method => validMethods.includes(method));
+      
+      if (!isValidMethods) {
+        return res.status(400).json({ 
+          error: 'Invalid payment methods. Must be a non-empty array containing: cash, bkash, card' 
+        });
+      }
+    }
+
+    // Prepare update object
+    const updateData = { present_address };
+    if (payment_methods) {
+      updateData.payment_methods = payment_methods;
+    }
+
     const customer = await Customer.findOneAndUpdate(
       { userName: userName.toLowerCase() },
-      { $set: { present_address } },
+      { $set: updateData },
       { new: true, runValidators: true }
     ).select('-password');
 
@@ -382,6 +419,7 @@ export const updateCustomerProfile = async (req, res) => {
         phone: customer.phone,
         sex: customer.sex,
         present_address: customer.present_address,
+        payment_methods: customer.payment_methods,
         photo_link: customer.photo_link
       }
     });
@@ -457,5 +495,41 @@ export const checkEmail = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Validate customer token
+export const validateCustomerToken = async (req, res) => {
+  try {
+    // If we reach here, the token is valid (passed through auth middleware)
+    const customer = await Customer.findById(req.userId).select('-password');
+    
+    if (!customer) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Customer not found' 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Token is valid',
+      data: {
+        id: customer._id,
+        name: customer.name,
+        email: customer.email,
+        userName: customer.userName,
+        phone: customer.phone,
+        sex: customer.sex,
+        present_address: customer.present_address
+      }
+    });
+  } catch (error) {
+    console.error('Token validation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error during token validation', 
+      error: error.message 
+    });
   }
 };

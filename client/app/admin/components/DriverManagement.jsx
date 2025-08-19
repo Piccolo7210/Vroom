@@ -2,28 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FaUser, FaSearch, FaEdit, FaBan, FaTrash, FaCheck, FaEye, FaSpinner, FaCar, FaStar } from 'react-icons/fa';
+import { FaUser, FaSearch, FaEye, FaSpinner, FaCar, FaStar } from 'react-icons/fa';
 
 const DriverManagement = () => {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // list, details, edit
+  const [viewMode, setViewMode] = useState('list'); // list, details
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    vehicleDetails: {
-      model: '',
-      color: '',
-      licensePlate: ''
-    },
-    status: ''
-  });
 
   // Fetch drivers
   useEffect(() => {
@@ -34,22 +23,42 @@ const DriverManagement = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/drivers?page=${page}&limit=${limit}&search=${searchTerm}`, {
+      
+      if (!token) {
+        toast.error('Authentication required. Please log in again.');
+        return;
+      }
+      
+      console.log('Fetching drivers with token:', token.substring(0, 10) + '...');
+      console.log('Making request to:', `http://localhost:5000/api/admin/drivers?page=${page}&limit=${limit}&search=${searchTerm}`);
+      
+      const response = await fetch(`http://localhost:5000/api/admin/drivers?page=${page}&limit=${limit}&search=${searchTerm}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch drivers');
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`Failed to fetch drivers: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
-      setDrivers(data.drivers);
+      console.log('Drivers data:', data);
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to fetch drivers');
+      }
+      
+      setDrivers(data.drivers || []);
       setTotalPages(data.totalPages || 1);
     } catch (error) {
       console.error('Error fetching drivers:', error);
-      toast.error('Error loading drivers. Please try again.');
+      toast.error(`Error loading drivers: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -64,139 +73,6 @@ const DriverManagement = () => {
   const handleViewDriver = (driver) => {
     setSelectedDriver(driver);
     setViewMode('details');
-  };
-
-  const handleEditDriver = (driver) => {
-    setSelectedDriver(driver);
-    setEditForm({
-      name: driver.name || '',
-      email: driver.email || '',
-      phone: driver.phone || '',
-      vehicleDetails: {
-        model: driver.vehicleDetails?.model || '',
-        color: driver.vehicleDetails?.color || '',
-        licensePlate: driver.vehicleDetails?.licensePlate || ''
-      },
-      status: driver.status || 'active'
-    });
-    setViewMode('edit');
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    
-    if (name.startsWith('vehicle.')) {
-      const vehicleField = name.split('.')[1];
-      setEditForm(prev => ({
-        ...prev,
-        vehicleDetails: {
-          ...prev.vehicleDetails,
-          [vehicleField]: value
-        }
-      }));
-    } else {
-      setEditForm(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-
-  const handleUpdateDriver = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/drivers/${selectedDriver._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(editForm)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update driver');
-      }
-
-      toast.success('Driver updated successfully');
-      setViewMode('list');
-      fetchDrivers();
-    } catch (error) {
-      console.error('Error updating driver:', error);
-      toast.error('Error updating driver. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggleStatus = async (driverId, currentStatus) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/drivers/${driverId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update driver status');
-      }
-
-      toast.success(`Driver ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
-      
-      // Update local state
-      setDrivers(drivers.map(driver => 
-        driver._id === driverId ? { ...driver, status: newStatus } : driver
-      ));
-      
-      if (selectedDriver && selectedDriver._id === driverId) {
-        setSelectedDriver({ ...selectedDriver, status: newStatus });
-      }
-    } catch (error) {
-      console.error('Error updating driver status:', error);
-      toast.error('Error updating driver status. Please try again.');
-    }
-  };
-
-  const handleDeleteDriver = async (driverId) => {
-    if (!window.confirm('Are you sure you want to delete this driver? This action cannot be undone.')) {
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/drivers/${driverId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete driver');
-      }
-
-      toast.success('Driver deleted successfully');
-      
-      // Update local state
-      setDrivers(drivers.filter(driver => driver._id !== driverId));
-      
-      if (selectedDriver && selectedDriver._id === driverId) {
-        setViewMode('list');
-        setSelectedDriver(null);
-      }
-    } catch (error) {
-      console.error('Error deleting driver:', error);
-      toast.error('Error deleting driver. Please try again.');
-    }
   };
 
   // Pagination handlers
@@ -266,10 +142,10 @@ const DriverManagement = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
-                        {driver.photo ? (
+                        {driver.photo_link ? (
                           <img
                             className="h-10 w-10 rounded-full object-cover"
-                            src={driver.photo}
+                            src={driver.photo_link}
                             alt={driver.name}
                           />
                         ) : (
@@ -297,10 +173,10 @@ const DriverManagement = () => {
                       </div>
                       <div>
                         <div className="text-sm text-gray-900">
-                          {driver.vehicleDetails?.model || 'N/A'}
+                          {driver.vehicle_type || 'N/A'} - {driver.vehicle_no || 'N/A'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {driver.vehicleDetails?.licensePlate || 'No plate info'}
+                          License: {driver.license_no || 'No license info'}
                         </div>
                       </div>
                     </div>
@@ -314,44 +190,23 @@ const DriverManagement = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        driver.status === 'active'
+                        driver.verificationStatus === 'trusted'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          : driver.verificationStatus === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
                       }`}
                     >
-                      {driver.status || 'active'}
+                      {driver.verificationStatus || 'waiting'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleViewDriver(driver)}
-                      className="text-gray-600 hover:text-gray-900 mr-3"
+                      className="text-gray-600 hover:text-gray-900"
                       title="View Details"
                     >
                       <FaEye />
-                    </button>
-                    <button
-                      onClick={() => handleEditDriver(driver)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                      title="Edit Driver"
-                    >
-                      <FaEdit />
-                    </button>
-                    <button
-                      onClick={() => handleToggleStatus(driver._id, driver.status)}
-                      className={`${
-                        driver.status === 'active' ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
-                      } mr-3`}
-                      title={driver.status === 'active' ? 'Deactivate Driver' : 'Activate Driver'}
-                    >
-                      {driver.status === 'active' ? <FaBan /> : <FaCheck />}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteDriver(driver._id)}
-                      className="text-red-600 hover:text-red-900"
-                      title="Delete Driver"
-                    >
-                      <FaTrash />
                     </button>
                   </td>
                 </tr>
@@ -422,10 +277,10 @@ const DriverManagement = () => {
 
         <div className="flex flex-col md:flex-row">
           <div className="md:w-1/3 flex flex-col items-center mb-6 md:mb-0">
-            {selectedDriver.photo ? (
+            {selectedDriver.photo_link ? (
               <img
                 className="h-40 w-40 rounded-full object-cover mb-4"
-                src={selectedDriver.photo}
+                src={selectedDriver.photo_link}
                 alt={selectedDriver.name}
               />
             ) : (
@@ -443,11 +298,13 @@ const DriverManagement = () => {
               </span>
             </div>
             <span className={`px-4 py-1 text-sm font-semibold rounded-full ${
-              selectedDriver.status === 'active'
+              selectedDriver.verificationStatus === 'trusted'
                 ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800'
+                : selectedDriver.verificationStatus === 'rejected'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {selectedDriver.status || 'active'}
+              {selectedDriver.verificationStatus || 'waiting'}
             </span>
           </div>
 
@@ -470,8 +327,28 @@ const DriverManagement = () => {
                 <p className="mt-1">{selectedDriver.phone || 'N/A'}</p>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-gray-500">License</h4>
-                <p className="mt-1">{selectedDriver.license || 'N/A'}</p>
+                <h4 className="text-sm font-medium text-gray-500">License Number</h4>
+                <p className="mt-1">{selectedDriver.license_no || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Age</h4>
+                <p className="mt-1">{selectedDriver.age || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Gender</h4>
+                <p className="mt-1">{selectedDriver.sex || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">NID Number</h4>
+                <p className="mt-1">{selectedDriver.nid_no || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Present Address</h4>
+                <p className="mt-1">{selectedDriver.present_address || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Permanent Address</h4>
+                <p className="mt-1">{selectedDriver.permanent_address || 'N/A'}</p>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-gray-500">Joined On</h4>
@@ -481,53 +358,32 @@ const DriverManagement = () => {
                     : 'N/A'}
                 </p>
               </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Verification Status</h4>
+                <p className="mt-1">{selectedDriver.verificationStatus || 'waiting'}</p>
+              </div>
             </div>
 
             <div className="mt-6 bg-gray-50 p-4 rounded-lg">
               <h4 className="text-sm font-medium text-gray-700 mb-3">Vehicle Information</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h5 className="text-xs text-gray-500">Model</h5>
-                  <p className="font-medium">{selectedDriver.vehicleDetails?.model || 'N/A'}</p>
+                  <h5 className="text-xs text-gray-500">Vehicle Type</h5>
+                  <p className="font-medium">{selectedDriver.vehicle_type || 'N/A'}</p>
                 </div>
                 <div>
-                  <h5 className="text-xs text-gray-500">Color</h5>
-                  <p className="font-medium">{selectedDriver.vehicleDetails?.color || 'N/A'}</p>
-                </div>
-                <div>
-                  <h5 className="text-xs text-gray-500">License Plate</h5>
-                  <p className="font-medium">{selectedDriver.vehicleDetails?.licensePlate || 'N/A'}</p>
+                  <h5 className="text-xs text-gray-500">Vehicle Number</h5>
+                  <p className="font-medium">{selectedDriver.vehicle_no || 'N/A'}</p>
                 </div>
               </div>
             </div>
 
             <div className="mt-8 flex space-x-4">
               <button
-                onClick={() => handleEditDriver(selectedDriver)}
+                onClick={() => setViewMode('list')}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
               >
-                <FaEdit className="mr-2" />
-                Edit Driver
-              </button>
-              <button
-                onClick={() => handleToggleStatus(selectedDriver._id, selectedDriver.status)}
-                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                  selectedDriver.status === 'active'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500`}
-              >
-                {selectedDriver.status === 'active' ? (
-                  <>
-                    <FaBan className="mr-2" />
-                    Deactivate Driver
-                  </>
-                ) : (
-                  <>
-                    <FaCheck className="mr-2" />
-                    Activate Driver
-                  </>
-                )}
+                Back to Driver List
               </button>
             </div>
           </div>
@@ -542,146 +398,6 @@ const DriverManagement = () => {
           <h3 className="text-lg font-semibold mb-4">Earnings Overview</h3>
           <p className="text-gray-500">No earnings data available.</p>
         </div>
-      </div>
-    );
-  };
-
-  // Render edit form
-  const renderEditForm = () => {
-    if (!selectedDriver) return null;
-    
-    return (
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold">Edit Driver</h3>
-          <button
-            onClick={() => setViewMode('details')}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back to Details
-          </button>
-        </div>
-
-        <form onSubmit={handleUpdateDriver}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={editForm.name}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={editForm.email}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone
-              </label>
-              <input
-                type="text"
-                name="phone"
-                value={editForm.phone}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                name="status"
-                value={editForm.status}
-                onChange={handleFormChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <h4 className="text-lg font-medium mb-4">Vehicle Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vehicle Model
-                </label>
-                <input
-                  type="text"
-                  name="vehicle.model"
-                  value={editForm.vehicleDetails.model}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vehicle Color
-                </label>
-                <input
-                  type="text"
-                  name="vehicle.color"
-                  value={editForm.vehicleDetails.color}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  License Plate
-                </label>
-                <input
-                  type="text"
-                  name="vehicle.licensePlate"
-                  value={editForm.vehicleDetails.licensePlate}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 flex space-x-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              {loading ? (
-                <>
-                  <FaSpinner className="animate-spin mr-2" />
-                  Updating...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('details')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
       </div>
     );
   };
@@ -708,7 +424,6 @@ const DriverManagement = () => {
         <>
           {viewMode === 'list' && renderDriverList()}
           {viewMode === 'details' && renderDriverDetails()}
-          {viewMode === 'edit' && renderEditForm()}
         </>
       )}
     </div>

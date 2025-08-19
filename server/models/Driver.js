@@ -56,7 +56,21 @@ const driverSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-});
+    verificationStatus: {
+        type: String,
+        required: true,
+        enum: ['waiting', 'trusted', 'rejected'],
+        default: 'waiting',
+    },
+    nid_no: {
+        type: String,
+        required: true,
+    },
+    rejectionReason: {
+        type: String,
+        default: null,
+    },
+}, { timestamps: true });
 
 const Driver = mongoose.model('Driver', driverSchema);
 

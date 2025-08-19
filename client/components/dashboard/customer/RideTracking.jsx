@@ -7,6 +7,7 @@ import RideService from '@/app/lib/rideService';
 import SocketService from '@/app/lib/socketService';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import PaymentSelectionModal from './PaymentSelectionModal';
 import dynamic from 'next/dynamic';
 
 // Dynamically import RideMap to avoid SSR issues
@@ -30,12 +31,14 @@ const RideTracking = ({ rideId, onRideComplete }) => {
   const [estimatedArrival, setEstimatedArrival] = useState(null);
   const [currentDistance, setCurrentDistance] = useState(null);
   const [tripProgress, setTripProgress] = useState(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [customerProfile, setCustomerProfile] = useState(null);
   const socketConnected = useRef(false);
-  const intervalRef = useRef(null);
 
   useEffect(() => {
     if (rideId) {
       fetchRideDetails();
+      fetchCustomerProfile();
       setupRealTimeTracking();
     } else {
       setLoading(false); // No rideId, so stop loading
@@ -48,14 +51,25 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
   // Handle ride completion/cancellation
   useEffect(() => {
-    if (ride && (ride.status === 'completed' || ride.status === 'cancelled') && onRideComplete) {
+    if (ride && ride.status === 'completed' && ride.payment_status === 'pending' && customerProfile) {
+      // Check if customer has multiple payment methods or only cash
+      const paymentMethods = customerProfile.payment_methods || ['cash'];
+      
+      if (paymentMethods.length > 1 || (paymentMethods.length === 1 && !paymentMethods.includes('cash'))) {
+        // Show payment selection modal if customer has multiple payment methods or only non-cash methods
+        setShowPaymentModal(true);
+      } else if (paymentMethods.includes('cash') && paymentMethods.length === 1) {
+        // Auto-complete payment with cash if it's the only method
+        handleCashPaymentAuto();
+      }
+    } else if (ride && ride.status === 'cancelled' && onRideComplete) {
       const timer = setTimeout(() => {
         onRideComplete();
-      }, 3000); // Show completion message for 3 seconds before clearing
+      }, 3000); // Show cancellation message for 3 seconds before clearing
       
       return () => clearTimeout(timer);
     }
-  }, [ride?.status, onRideComplete]);
+  }, [ride?.status, ride?.payment_status, customerProfile, onRideComplete]);
 
   const fetchRideDetails = async () => {
     try {
@@ -78,16 +92,92 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     }
   };
 
+  const fetchCustomerProfile = async () => {
+    try {
+      // Get customer username from localStorage or ride data
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      const userName = userData.userName || ride?.customer?.userName;
+      
+      if (userName) {
+        const response = await RideService.getCustomerProfile(userName);
+        if (response.success) {
+          setCustomerProfile(response.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customer profile:', error);
+      // Set default profile if fetch fails
+      setCustomerProfile({ payment_methods: ['cash'] });
+    }
+  };
+
+  const handleCashPaymentAuto = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`http://localhost:5000/api/rides/${ride._id}/payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          paymentMethod: 'cash',
+          paymentStatus: 'completed'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process cash payment');
+      }
+
+      const result = await response.json();
+      
+      toast.success('Cash payment completed successfully!');
+      
+      // Update ride state
+      setRide(result.data.ride);
+      
+      // Clear ride after a delay
+      setTimeout(() => {
+        if (onRideComplete) {
+          onRideComplete();
+        }
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Auto cash payment error:', error);
+      toast.error('Failed to process cash payment. Please try again.');
+    }
+  };
+
+  const handlePaymentMethodSelect = (paymentMethod) => {
+    // PaymentSelectionModal handles the actual payment processing
+    // This function receives the updated ride data after successful payment
+    console.log('Payment method selected:', paymentMethod);
+  };
+
+  const handlePaymentComplete = (updatedRide) => {
+    setRide(updatedRide);
+    setShowPaymentModal(false);
+    
+    // Clear ride after showing success message
+    setTimeout(() => {
+      if (onRideComplete) {
+        onRideComplete();
+      }
+    }, 2000);
+  };
+
   const fetchDriverLocation = async () => {
     try {
       const response = await RideService.getDriverLocation(rideId);
-      
       if (response.success) {
         setDriverLocation(response.data.location);
         calculateEstimatedArrival(response.data.location);
       }
     } catch (error) {
-      // Error fetching driver location
+      console.error('Error fetching driver location:', error);
     }
   };
 
@@ -99,14 +189,21 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
       // Listen for driver location updates
       SocketService.onDriverLocationUpdate((locationData) => {
+        console.log('Received driver location update:', locationData);
         setDriverLocation(locationData);
         calculateEstimatedArrival(locationData);
         calculateCurrentDistance(locationData);
         calculateTripProgress(locationData);
+        
+        // Show subtle notification for location updates
+        if (ride && ['accepted', 'picked_up', 'in_progress'].includes(ride.status)) {
+          console.log('Driver location updated');
+        }
       });
 
       // Listen for ride status changes
       SocketService.onRideStatusChange((statusData) => {
+        console.log('Received ride status update:', statusData);
         setRide(prev => ({
           ...prev,
           status: statusData.status,
@@ -125,8 +222,8 @@ const RideTracking = ({ rideId, onRideComplete }) => {
             toast.info('🚀 Ride started! Heading to destination');
             break;
           case 'completed':
-            toast.success('✅ Ride completed! Thank you for using our service');
-            onRideComplete && onRideComplete();
+            toast.success('✅ Ride completed! Please complete your payment');
+            // Don't auto-call onRideComplete here, let the payment flow handle it
             break;
           case 'cancelled':
             toast.error('❌ Ride has been cancelled');
@@ -145,18 +242,9 @@ const RideTracking = ({ rideId, onRideComplete }) => {
       // Listen for ETA updates
       SocketService.getSocket()?.on('eta_update', (data) => {
         setEstimatedArrival(data.eta_minutes);
+        console.log('ETA updated:', data.eta_minutes, 'minutes');
       });
     }
-
-    // Set up periodic driver location refresh as backup
-    const locationInterval = setInterval(() => {
-      if (ride && ['accepted', 'picked_up', 'in_progress'].includes(ride.status)) {
-        fetchDriverLocation();
-      }
-    }, 10000); // Every 10 seconds
-
-    // Store interval ref for cleanup
-    intervalRef.current = locationInterval;
   };
 
   const cleanupTracking = () => {
@@ -165,12 +253,6 @@ const RideTracking = ({ rideId, onRideComplete }) => {
       SocketService.removeAllListeners('ride_status_changed');
       SocketService.disconnect();
       socketConnected.current = false;
-    }
-    
-    // Clear periodic location refresh interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
     }
   };
 
@@ -216,6 +298,8 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
     // Calculate and display additional useful info
     const estimatedArrivalTime = new Date(Date.now() + estimatedTimeMinutes * 60000);
+    console.log(`ETA: ${estimatedTimeMinutes} minutes (${estimatedArrivalTime.toLocaleTimeString()})`);
+    console.log(`Distance: ${distance.toFixed(2)} km, Speed: ${avgSpeed.toFixed(1)} km/h`);
   };
 
   const calculateCurrentDistance = (location) => {
@@ -357,52 +441,68 @@ const RideTracking = ({ rideId, onRideComplete }) => {
     );
   }
 
-  // Show "No Active Ride" for completed or cancelled rides
-  if (ride.status === 'completed' || ride.status === 'cancelled') {
+  // Show "No Active Ride" for completed or cancelled rides (only if payment is also completed)
+  if (ride && ride.status === 'completed' && ride.payment_status === 'completed') {
     return (
       <Card className="p-8 text-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-            ride.status === 'completed' ? 'bg-green-100' : 'bg-red-100'
-          }`}>
-            {ride.status === 'completed' ? (
-              <FaCar className={`text-2xl text-green-600`} />
-            ) : (
-              <FaCar className={`text-2xl text-red-600`} />
-            )}
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-green-100">
+            <FaCar className="text-2xl text-green-600" />
           </div>
           
           <div>
             <h3 className="text-xl font-semibold text-gray-800 mb-2">
-              {ride.status === 'completed' ? 'Ride Completed Successfully!' : 'Ride Cancelled'}
+              Ride Completed Successfully!
             </h3>
             <p className="text-gray-600 mb-4">
-              {ride.status === 'completed' 
-                ? 'Thank you for choosing Vroom! This page will refresh shortly.' 
-                : 'Your ride was cancelled. This page will refresh shortly.'
-              }
+              Thank you for choosing Vroom! Payment has been processed successfully.
             </p>
             
-            {ride.status === 'completed' && (
-              <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">From:</span>
-                  <span className="font-medium">{ride.pickup_location.address}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">To:</span>
-                  <span className="font-medium">{ride.destination.address}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">Fare:</span>
-                  <span className="font-medium text-green-600">৳{ride.fare.total_fare}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Completed:</span>
-                  <span className="font-medium">{formatTime(ride.ride_completed_at)}</span>
-                </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-sm">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">From:</span>
+                <span className="font-medium">{ride.pickup_location.address}</span>
               </div>
-            )}
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">To:</span>
+                <span className="font-medium">{ride.destination.address}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Fare:</span>
+                <span className="font-medium text-green-600">৳{ride.fare.total_fare}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Payment:</span>
+                <span className="font-medium text-green-600 capitalize">{ride.payment_method}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Completed:</span>
+                <span className="font-medium">{formatTime(ride.ride_completed_at)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            Redirecting to booking page...
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (ride && ride.status === 'cancelled') {
+    return (
+      <Card className="p-8 text-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-red-100">
+            <FaCar className="text-2xl text-red-600" />
+          </div>
+          
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Ride Cancelled</h3>
+            <p className="text-gray-600 mb-4">
+              Your ride was cancelled. This page will refresh shortly.
+            </p>
           </div>
           
           <p className="text-sm text-gray-500">
@@ -416,74 +516,49 @@ const RideTracking = ({ rideId, onRideComplete }) => {
   return (
     <div className="space-y-6">
       {/* Connection Status */}
-      <div className="bg-gradient-to-r from-white to-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className={`w-4 h-4 rounded-full ${
-                SocketService.isConnected() ? 'bg-green-500' : 'bg-red-500'
-              }`}></div>
-              {SocketService.isConnected() && (
-                <div className="absolute inset-0 w-4 h-4 rounded-full bg-green-400 animate-ping opacity-75"></div>
-              )}
-            </div>
-            <div>
-              <span className="text-sm font-semibold text-slate-800">
-                {SocketService.isConnected() ? 'Live Tracking Active' : 'Connection Lost'}
-              </span>
-              <div className="text-xs text-slate-500">
-                {SocketService.isConnected() 
-                  ? 'Real-time updates enabled' 
-                  : 'Attempting to reconnect...'
-                }
-              </div>
-            </div>
-          </div>
-          {!SocketService.isConnected() && (
-            <Button
-              onClick={() => {
-                cleanupTracking();
-                setupRealTimeTracking();
-              }}
-              size="sm"
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-            >
-              Reconnect
-            </Button>
-          )}
+      <div className="flex items-center justify-between bg-white border rounded-lg p-3 shadow-sm">
+        <div className="flex items-center space-x-2">
+          <div className={`w-3 h-3 rounded-full ${
+            SocketService.isConnected() ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+          }`}></div>
+          <span className="text-sm font-medium">
+            {SocketService.isConnected() ? 'Live Tracking Active' : 'Connection Lost'}
+          </span>
         </div>
+        {!SocketService.isConnected() && (
+          <Button
+            onClick={() => {
+              cleanupTracking();
+              setupRealTimeTracking();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            Reconnect
+          </Button>
+        )}
       </div>
 
       {/* Ride Status Header */}
-      <Card className="p-8 bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-blue-100 shadow-lg">
+      <Card className="p-6">
         <div className="text-center">
-          <div className="mb-4">
-            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-              <FaCar className="text-2xl text-white" />
-            </div>
-          </div>
-          <h2 className="text-3xl font-bold text-slate-800 mb-3">Tracking Your Ride</h2>
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className={`w-3 h-3 rounded-full ${getStatusColor(ride.status).replace('text-', 'bg-').replace('-600', '-500')}`}></div>
-            <p className={`text-xl font-semibold ${getStatusColor(ride.status)}`}>
-              {getStatusMessage(ride.status)}
-            </p>
-          </div>
+          <h2 className="text-2xl font-bold mb-2">Tracking Your Ride</h2>
+          <p className={`text-lg font-semibold ${getStatusColor(ride.status)}`}>
+            {getStatusMessage(ride.status)}
+          </p>
           
           {estimatedArrival && ride.status !== 'completed' && (
-            <div className="mt-6 p-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl text-white shadow-xl">
-              <div className="flex items-center justify-center space-x-4">
-                <div className="p-3 bg-white/20 rounded-full">
-                  <FaClock className="text-xl" />
-                </div>
+            <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-center space-x-3">
+                <FaClock className="text-blue-600 text-lg" />
                 <div className="text-center">
-                  <div className="text-4xl font-bold mb-1">
+                  <div className="text-2xl font-bold text-blue-800">
                     {estimatedArrival} min
                   </div>
-                  <div className="text-blue-100 font-medium">
+                  <div className="text-sm text-blue-600">
                     {ride.status === 'accepted' ? 'until pickup' : 'until destination'}
                   </div>
-                  <div className="text-xs text-blue-200 mt-2 opacity-90">
+                  <div className="text-xs text-blue-500 mt-1">
                     ETA: {new Date(Date.now() + estimatedArrival * 60000).toLocaleTimeString('en-US', {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -498,41 +573,28 @@ const RideTracking = ({ rideId, onRideComplete }) => {
 
       {/* Driver Information */}
       {ride.driver && (
-        <Card className="p-6 bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200 shadow-md">
-          <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mr-3">
-              <FaCar className="text-white text-sm" />
-            </div>
-            Your Driver
-          </h3>
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Driver Information</h3>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-                  <FaCar className="text-white text-2xl" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <FaCar className="text-blue-600 text-xl" />
               </div>
               <div>
-                <p className="text-xl font-bold text-slate-800">{ride.driver.name}</p>
-                <p className="text-slate-600 font-medium">Vehicle: {ride.driver.vehicle_no}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium capitalize">
-                    {ride.vehicle_type}
-                  </span>
-                  <span className="text-xs text-slate-500">• Licensed Driver</span>
-                </div>
+                <p className="font-semibold">{ride.driver.name}</p>
+                <p className="text-gray-600">Vehicle: {ride.driver.vehicle_no}</p>
+                <p className="text-sm text-gray-500 capitalize">{ride.vehicle_type}</p>
               </div>
             </div>
             
             <Button
               onClick={() => window.open(`tel:${ride.driver.phone}`)}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-200 flex items-center space-x-2"
+              variant="outline"
+              size="sm"
+              className="flex items-center space-x-2"
             >
-              <FaPhone className="text-sm" />
-              <span className="font-medium">Call Driver</span>
+              <FaPhone />
+              <span>Call Driver</span>
             </Button>
           </div>
         </Card>
@@ -576,29 +638,17 @@ const RideTracking = ({ rideId, onRideComplete }) => {
       </Card>
 
       {/* Live Map */}
-      <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200 shadow-lg">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-slate-800 flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-3">
-              <FaMapMarkerAlt className="text-white text-sm" />
-            </div>
-            Live Map Tracking
-          </h3>
-          {driverLocation && (
-            <div className="flex items-center space-x-2 px-3 py-1 bg-green-100 text-green-700 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-medium">Live Location</span>
-            </div>
-          )}
-        </div>
-        <div className="relative rounded-2xl overflow-hidden shadow-xl border border-blue-200">
-          <RideMap 
-            pickup={ride.pickup_location}
-            destination={ride.destination}
-            driverLocation={driverLocation}
-            rideStatus={ride.status}
-          />
-        </div>
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <FaMapMarkerAlt className="mr-2 text-blue-600" />
+          Live Map Tracking
+        </h3>
+        <RideMap 
+          pickup={ride.pickup_location}
+          destination={ride.destination}
+          driverLocation={driverLocation}
+          rideStatus={ride.status}
+        />
       </Card>
 
       {/* Live Tracking Stats */}
@@ -778,6 +828,16 @@ const RideTracking = ({ rideId, onRideComplete }) => {
           })}
         </div>
       </Card>
+
+      {/* Payment Selection Modal */}
+      {showPaymentModal && (
+        <PaymentSelectionModal
+          ride={ride}
+          customerPaymentMethods={customerProfile?.payment_methods || ['cash']}
+          onClose={() => setShowPaymentModal(false)}
+          onPaymentComplete={handlePaymentComplete}
+        />
+      )}
     </div>
   );
 };
